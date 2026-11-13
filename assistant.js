@@ -172,7 +172,7 @@
     chips.innerHTML = "";
     T().chips.forEach(q => {
       const b = document.createElement("button"); b.type = "button"; b.textContent = q;
-      b.onclick = () => ask(q); chips.appendChild(b);
+      b.onclick = () => { unlockAudio(); ask(q); }; chips.appendChild(b);
     });
     if (recog) recog.lang = T().code;
     setState(stage.dataset.state || "idle");
@@ -188,6 +188,18 @@
   let serverTTS = null;          // null = әлі белгісіз, false = қосылмаған
   let audioEl = null, audioCtx = null, analyser = null, rafId = 0, speakToken = 0;
   const mouthRects = () => stage.querySelectorAll(".oyb-mouth rect");
+
+  // Телефондар (әсіресе iPhone) дыбысты тек батырма басылған сәтте ашады.
+  // Сондықтан әр басуда AudioContext пен speechSynthesis-ті алдын ала «оятып» қоямыз.
+  function unlockAudio() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const b = audioCtx.createBuffer(1, 1, 22050), src = audioCtx.createBufferSource();
+      src.buffer = b; src.connect(audioCtx.destination); src.start(0);
+    } catch {}
+    try { if (synth && !unlockAudio.done) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); unlockAudio.done = true; } } catch {}
+  }
 
 
   // ---------- Piper: браузердің ішінде жұмыс істейтін тегін нейрон дауыс ----------
@@ -422,6 +434,7 @@
     };
   }
   micBtn.onclick = () => {
+    unlockAudio();
     if (!recog) { addMsg(T().noMic, "e"); return; }
     if (recognizing) { recog.stop(); return; }
     stopSpeaking();
@@ -454,10 +467,11 @@
       busy = false; micBtn.disabled = sendBtn.disabled = false;
     }
   }
-  $(".oyb-bar").addEventListener("submit", (e) => { e.preventDefault(); ask(input.value); });
+  $(".oyb-bar").addEventListener("submit", (e) => { e.preventDefault(); unlockAudio(); ask(input.value); });
 
   // ---------- Ашу/жабу, тіл, дыбыс ----------
   function open() {
+    unlockAudio();
     panel.classList.add("open"); fab.style.display = "none";
     if (!greeted) { greeted = true; addMsg(T().hello, "b"); speak(T().hello); }
     prefetchVoice();
