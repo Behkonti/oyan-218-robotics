@@ -11,17 +11,17 @@
   const TTS_URL = SUPABASE_URL + "/functions/v1/tts";
 
   const LANGS = {
-    kk: { code: "kk-KZ", label: "ҚАЗ", name: "Ойбот", open: "Ойботпен сөйлесу", hello: "Сәлем! Мен Ойботпын, OYAN командасының көмекшісімін. Команда, жоба, робот немесе датчиктер туралы сұраңыз.",
+    kk: { voiceLoad: "Дауыс жүктелуде…", code: "kk-KZ", label: "ҚАЗ", name: "Ойбот", open: "Ойботпен сөйлесу", hello: "Сәлем! Мен Ойботпын, OYAN командасының көмекшісімін. Команда, жоба, робот немесе датчиктер туралы сұраңыз.",
           placeholder: "Сұрағыңызды жазыңыз…", listen: "Тыңдап тұрмын…", think: "Ойланып жатырмын…", speak: "Сөйлеп тұрмын", idle: "Сұрақ қойыңыз",
           noMic: "Дауыспен сұрау үшін Chrome немесе Edge браузерін қолданыңыз.", denied: "Микрофонға рұқсат беріңіз (адрес жолағындағы құлып белгісі).",
           err: "Кешіріңіз, қазір жауап бере алмадым. Сәлден соң қайталап көріңіз.",
           chips: ["OYAN командасы туралы айтып бер", "Сіздің жобаңыз не туралы?", "Қазір температура қанша?", "Робот қалай жұмыс істейді?"] },
-    ru: { code: "ru-RU", label: "РУС", name: "Ойбот", open: "Поговорить с Ойботом", hello: "Привет! Я Ойбот, помощник команды OYAN. Спросите о команде, проекте, роботе или датчиках.",
+    ru: { voiceLoad: "Загружаю голос…", code: "ru-RU", label: "РУС", name: "Ойбот", open: "Поговорить с Ойботом", hello: "Привет! Я Ойбот, помощник команды OYAN. Спросите о команде, проекте, роботе или датчиках.",
           placeholder: "Напишите вопрос…", listen: "Слушаю…", think: "Думаю…", speak: "Говорю", idle: "Задайте вопрос",
           noMic: "Для голосового ввода откройте сайт в Chrome или Edge.", denied: "Разрешите доступ к микрофону (значок замка в адресной строке).",
           err: "Извините, сейчас не получилось ответить. Попробуйте чуть позже.",
           chips: ["Расскажи о команде OYAN", "О чём ваш проект?", "Какая сейчас температура?", "Как устроен робот?"] },
-    en: { code: "en-US", label: "ENG", name: "Oybot", open: "Talk to Oybot", hello: "Hi! I'm Oybot, the OYAN team assistant. Ask me about the team, the project, the robot or the sensors.",
+    en: { voiceLoad: "Loading voice…", code: "en-US", label: "ENG", name: "Oybot", open: "Talk to Oybot", hello: "Hi! I'm Oybot, the OYAN team assistant. Ask me about the team, the project, the robot or the sensors.",
           placeholder: "Type your question…", listen: "Listening…", think: "Thinking…", speak: "Speaking", idle: "Ask me anything",
           noMic: "Voice input works in Chrome or Edge.", denied: "Please allow microphone access (lock icon in the address bar).",
           err: "Sorry, I couldn't answer right now. Please try again shortly.",
@@ -189,6 +189,119 @@
   let audioEl = null, audioCtx = null, analyser = null, rafId = 0, speakToken = 0;
   const mouthRects = () => stage.querySelectorAll(".oyb-mouth rect");
 
+
+  // ---------- Piper: браузердің ішінде жұмыс істейтін тегін нейрон дауыс ----------
+  // Модельдер бір рет жүктеліп, браузердің Cache Storage-інде сақталады (келесі жолы бірден).
+  const PIPER = {
+    models: "https://huggingface.co/diffusionstudio/piper-voices/resolve/main",
+    ort: "https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.18.0/",
+    phonemizer: "https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/dist/piper-DeOu3H9E.js",
+    phonemizerFiles: "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize",
+    // Дауыстар: қазақшасы — IS2AI issai (high, 6 дикторлы), орысшасы — Dmitri, ағылшыншасы — Ryan
+    voices: {
+      kk: { path: "kk/kk_KZ/issai/high/kk_KZ-issai-high.onnx", speaker: 0 },
+      ru: { path: "ru/ru_RU/dmitri/medium/ru_RU-dmitri-medium.onnx", speaker: 0 },
+      en: { path: "en/en_US/ryan/medium/en_US-ryan-medium.onnx", speaker: 0 },
+    },
+    cache: "oybot-piper-v1",
+  };
+  const piperState = { sessions: {}, configs: {}, loading: {}, progress: {}, phon: null, failed: false };
+  // Мобильді трафикті үнемдеу режимінде 128 MB модельді жүктемейміз
+  const piperSupported = () => typeof WebAssembly === "object" && "caches" in window && !piperState.failed &&
+    !(navigator.connection && navigator.connection.saveData);
+
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      if (document.querySelector(`script[src="${src}"]`)) return res();
+      const el = document.createElement("script"); el.src = src; el.onload = res; el.onerror = () => rej(new Error("load " + src));
+      document.head.appendChild(el);
+    });
+  }
+  async function cachedFetch(url, onProgress) {
+    const cache = await caches.open(PIPER.cache);
+    const hit = await cache.match(url);
+    if (hit) return hit.arrayBuffer();
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("download " + r.status);
+    const total = +r.headers.get("content-length") || 0;
+    const reader = r.body.getReader(); const chunks = []; let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value); got += value.length;
+      if (onProgress && total) onProgress(got / total);
+    }
+    const blob = new Blob(chunks);
+    try { await cache.put(url, new Response(blob)); } catch (e) { console.warn("Ойбот: кэшке сақталмады", e); }
+    return blob.arrayBuffer();
+  }
+  async function piperLoad(l) {
+    if (piperState.sessions[l]) return;
+    if (piperState.loading[l]) return piperState.loading[l];
+    piperState.loading[l] = (async () => {
+      await loadScript(PIPER.ort + "ort.min.js");
+      ort.env.wasm.wasmPaths = PIPER.ort;
+      ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+      piperState.phon = piperState.phon || await import(PIPER.phonemizer);
+      const v = PIPER.voices[l], url = `${PIPER.models}/${v.path}`;
+      const cfg = JSON.parse(new TextDecoder().decode(await cachedFetch(url + ".json")));
+      const model = await cachedFetch(url, (f) => { piperState.progress[l] = f; if (l === lang && stage.dataset.state !== "speaking") statusEl.textContent = `${T().voiceLoad} ${Math.round(f * 100)}%`; });
+      piperState.sessions[l] = await ort.InferenceSession.create(model);
+      piperState.configs[l] = cfg;
+      if (stage.dataset.state === "idle") setState("idle");
+    })().catch((e) => { console.warn("Ойбот: Piper жүктелмеді", e); piperState.loading[l] = null; throw e; });
+    return piperState.loading[l];
+  }
+  function phonemize(text, espeakVoice) {
+    return new Promise(async (res, rej) => {
+      try {
+        (await piperState.phon.createPiperPhonemize({
+          print: (line) => res(JSON.parse(line).phoneme_ids),
+          printErr: (line) => rej(new Error(line)),
+          locateFile: (f) => f.endsWith(".wasm") ? PIPER.phonemizerFiles + ".wasm" : f.endsWith(".data") ? PIPER.phonemizerFiles + ".data" : f,
+        })).callMain(["-l", espeakVoice, "--input", JSON.stringify([{ text }]), "--espeak_data", "/espeak-ng-data"]);
+      } catch (e) { rej(e); }
+    });
+  }
+  async function piperSynth(l, text) {
+    const cfg = piperState.configs[l], session = piperState.sessions[l];
+    const ids = await phonemize(text, cfg.espeak.voice);
+    const feeds = {
+      input: new ort.Tensor("int64", BigInt64Array.from(ids.map(BigInt)), [1, ids.length]),
+      input_lengths: new ort.Tensor("int64", BigInt64Array.from([BigInt(ids.length)])),
+      scales: new ort.Tensor("float32", Float32Array.from([cfg.inference.noise_scale, cfg.inference.length_scale, cfg.inference.noise_w])),
+    };
+    if (cfg.num_speakers > 1) feeds.sid = new ort.Tensor("int64", BigInt64Array.from([BigInt(PIPER.voices[l].speaker)]));
+    const out = await session.run(feeds);
+    return { samples: out.output.data, rate: cfg.audio.sample_rate };
+  }
+  async function speakPiper(text, token) {
+    const l = lang;
+    await piperLoad(l);
+    if (token !== speakToken) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 64; analyser.connect(audioCtx.destination);
+    stage.classList.add("lipsync");
+    const sentences = text.match(/[^.!?…]+[.!?…]*/g)?.map((x) => x.trim()).filter(Boolean) || [text];
+    let when = audioCtx.currentTime + 0.05, started = false, last = null;
+    for (const sentence of sentences) {
+      if (token !== speakToken) return;
+      const { samples, rate } = await piperSynth(l, sentence);
+      if (token !== speakToken) return;
+      const buf = audioCtx.createBuffer(1, samples.length, rate);
+      buf.copyToChannel(samples instanceof Float32Array ? samples : Float32Array.from(samples), 0);
+      const src = audioCtx.createBufferSource(); src.buffer = buf; src.connect(analyser);
+      when = Math.max(when, audioCtx.currentTime + 0.02);
+      src.start(when); when += buf.duration + 0.12;
+      piperSources.push(src); last = src;
+      if (!started) { started = true; setState("speaking"); lipSync(); }
+    }
+    if (last) last.onended = () => { if (token === speakToken) { cancelAnimationFrame(rafId); stage.classList.remove("lipsync"); setState("idle"); } };
+  }
+  const piperSources = [];
+  const hasNaturalBrowserVoice = () => !!voices.find((v) => v.lang.toLowerCase().startsWith(lang) && /natural/i.test(v.name));
+
   function pickVoice() {
     const want = lang === "kk" ? ["kk", "ru"] : [lang];
     for (const w of want) {
@@ -205,6 +318,7 @@
     speakToken++;
     if (synth) synth.cancel();
     if (audioEl) { audioEl.pause(); audioEl.src = ""; audioEl = null; }
+    while (piperSources.length) { try { piperSources.pop().stop(); } catch {} }
     cancelAnimationFrame(rafId);
     stage.classList.remove("lipsync");
     mouthRects().forEach(r => r.style.transform = "");
@@ -265,9 +379,20 @@
     stopSpeaking();
     if (!soundOn) { setState("idle"); return; }
     const token = speakToken;
+    const clean = cleanForSpeech(text);
+    // 1) Azure (кілт қосылса)  2) браузердің табиғи дауысы (Edge)  3) Piper  4) браузердің қарапайым дауысы
     if (serverTTS !== false) {
-      try { await speakServer(cleanForSpeech(text), token); return; }
-      catch (e) { console.info("Ойбот: сервер дауысы жоқ, браузер дауысы қолданылады.", e.message); }
+      try { await speakServer(clean, token); return; }
+      catch (e) { console.info("Ойбот: сервер дауысы жоқ.", e.message); }
+    }
+    if (token !== speakToken) return;
+    if (!hasNaturalBrowserVoice() && piperSupported()) {
+      if (piperState.sessions[lang]) {
+        try { await speakPiper(clean, token); return; }
+        catch (e) { console.warn("Ойбот: Piper қатесі", e); }
+      } else {
+        piperLoad(lang).catch(() => {});   // модель фонда жүктеле берсін, әзірге браузер дауысы
+      }
     }
     if (token === speakToken) speakBrowser(text);
   }
@@ -334,6 +459,7 @@
   function open() {
     panel.classList.add("open"); fab.style.display = "none";
     if (!greeted) { greeted = true; addMsg(T().hello, "b"); speak(T().hello); }
+    prefetchVoice();
     input.focus();
   }
   function close() {
@@ -348,6 +474,10 @@
     lang = l; stopSpeaking(); setState("idle");
     try { localStorage.setItem("oyan-lang", lang); } catch {}
     renderLang();
+    if (panel.classList.contains("open")) prefetchVoice();
+  }
+  function prefetchVoice() {
+    if (soundOn && serverTTS !== true && !hasNaturalBrowserVoice() && piperSupported()) piperLoad(lang).catch(() => {});
   }
   panel.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
     // Сайттың тіл ауыстырғышы болса, бүкіл сайтты ауыстырамыз; ол "oyan:lang" оқиғасы арқылы Ойботқа қайтады
@@ -359,7 +489,7 @@
     try { localStorage.setItem("oybot-sound", soundOn ? "on" : "off"); } catch {}
     if (!soundOn) { stopSpeaking(); setState("idle"); }
   };
-  window.Oybot = { open, close, ask, setLang };
+  window.Oybot = { open, close, ask, setLang, debug: { piperLoad, piperSynth, piperState, speak } };
 
   renderLang(); setState("idle");
 })();
