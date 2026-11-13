@@ -1,4 +1,4 @@
-/* Ойбот — OYAN · 218 Robotics сайтының дауыстық AI-көмекшісі.
+/* Сақшы (бұрынғы атауы Ойбот) — OYAN · 218 Robotics сайтының дауыстық AI-көмекшісі.
  * Қосу: <script src="assistant.js" data-url="https://....supabase.co" data-key="sb_publishable_..." defer></script>
  * Дауысты тану: Web Speech API (Chrome, Edge). Дауыспен оқу: браузердің speechSynthesis.
  * Қазақша табиғи дауыс Microsoft Edge-де бар (Aigul, Daulet). Chrome-да қазақ дауысы болмаса, орыс дауысымен оқиды.
@@ -11,17 +11,17 @@
   const TTS_URL = SUPABASE_URL + "/functions/v1/tts";
 
   const LANGS = {
-    kk: { voiceLoad: "Дауыс жүктелуде…", code: "kk-KZ", label: "ҚАЗ", name: "Ойбот", open: "Ойботпен сөйлесу", hello: "Сәлем! Мен Ойботпын, OYAN командасының көмекшісімін. Команда, жоба, робот немесе датчиктер туралы сұраңыз.",
+    kk: { voiceLoad: "Дауыс жүктелуде…", eng: { label: "Дауыс", piper: "Piper (нейрон)", natural: "браузердің табиғи дауысы", azure: "Azure (нейрон)", basic: "браузердің қарапайым дауысы", loading: "жүктелуде", off: "өшірулі", fail: "Piper қатесі" }, code: "kk-KZ", label: "ҚАЗ", name: "Сақшы", open: "Сақшымен сөйлесу", hello: "Сәлем! Мен Сақшымын, OYAN командасының көмекшісімін. Команда, жоба, робот немесе датчиктер туралы сұраңыз.",
           placeholder: "Сұрағыңызды жазыңыз…", listen: "Тыңдап тұрмын…", think: "Ойланып жатырмын…", speak: "Сөйлеп тұрмын", idle: "Сұрақ қойыңыз",
           noMic: "Дауыспен сұрау үшін Chrome немесе Edge браузерін қолданыңыз.", denied: "Микрофонға рұқсат беріңіз (адрес жолағындағы құлып белгісі).",
           err: "Кешіріңіз, қазір жауап бере алмадым. Сәлден соң қайталап көріңіз.",
           chips: ["OYAN командасы туралы айтып бер", "Сіздің жобаңыз не туралы?", "Қазір температура қанша?", "Робот қалай жұмыс істейді?"] },
-    ru: { voiceLoad: "Загружаю голос…", code: "ru-RU", label: "РУС", name: "Ойбот", open: "Поговорить с Ойботом", hello: "Привет! Я Ойбот, помощник команды OYAN. Спросите о команде, проекте, роботе или датчиках.",
+    ru: { voiceLoad: "Загружаю голос…", eng: { label: "Голос", piper: "Piper (нейросеть)", natural: "естественный голос браузера", azure: "Azure (нейросеть)", basic: "обычный голос браузера", loading: "загрузка", off: "выключен", fail: "ошибка Piper" }, code: "ru-RU", label: "РУС", name: "Сакшы", open: "Поговорить с Сакшы", hello: "Привет! Я Сакшы, помощник команды OYAN. Спросите о команде, проекте, роботе или датчиках.",
           placeholder: "Напишите вопрос…", listen: "Слушаю…", think: "Думаю…", speak: "Говорю", idle: "Задайте вопрос",
           noMic: "Для голосового ввода откройте сайт в Chrome или Edge.", denied: "Разрешите доступ к микрофону (значок замка в адресной строке).",
           err: "Извините, сейчас не получилось ответить. Попробуйте чуть позже.",
           chips: ["Расскажи о команде OYAN", "О чём ваш проект?", "Какая сейчас температура?", "Как устроен робот?"] },
-    en: { voiceLoad: "Loading voice…", code: "en-US", label: "ENG", name: "Oybot", open: "Talk to Oybot", hello: "Hi! I'm Oybot, the OYAN team assistant. Ask me about the team, the project, the robot or the sensors.",
+    en: { voiceLoad: "Loading voice…", eng: { label: "Voice", piper: "Piper (neural)", natural: "browser natural voice", azure: "Azure (neural)", basic: "basic browser voice", loading: "loading", off: "off", fail: "Piper error" }, code: "en-US", label: "ENG", name: "Sakshy", open: "Talk to Sakshy", hello: "Hi! I'm Sakshy, the OYAN team assistant. Ask me about the team, the project, the robot or the sensors.",
           placeholder: "Type your question…", listen: "Listening…", think: "Thinking…", speak: "Speaking", idle: "Ask me anything",
           noMic: "Voice input works in Chrome or Edge.", denied: "Please allow microphone access (lock icon in the address bar).",
           err: "Sorry, I couldn't answer right now. Please try again shortly.",
@@ -52,6 +52,7 @@
   .oyb-stage{display:grid;justify-items:center;gap:4px;padding:12px 12px 6px;background:radial-gradient(circle at 50% 40%,#16493f 0,transparent 65%)}
   .oyb-stage svg{width:150px;height:150px;overflow:visible}
   .oyb-status{font-size:13px;color:#a3bdb3;min-height:20px;text-align:center}
+  .oyb-engine{font-size:11px;color:#7f9a90;text-align:center;min-height:16px}
   .oyb-log{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:8px}
   .oyb-msg{max-width:88%;padding:9px 12px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word;font-size:14px}
   .oyb-msg.u{align-self:flex-end;background:#1c4a40;border:1px solid #2f6b5d}
@@ -122,21 +123,21 @@
 
   // ---------- Интерфейс ----------
   const fab = document.createElement("button");
-  fab.className = "oyb-fab"; fab.type = "button"; fab.setAttribute("aria-label", "Ойботпен сөйлесу");
-  fab.innerHTML = `<span class="oyb-badge">Ойбот</span>${robotSVG(true)}`;
+  fab.className = "oyb-fab"; fab.type = "button"; fab.setAttribute("aria-label", "Сақшымен сөйлесу");
+  fab.innerHTML = `<span class="oyb-badge">Сақшы</span>${robotSVG(true)}`;
 
   const panel = document.createElement("section");
-  panel.className = "oyb-panel"; panel.setAttribute("aria-label", "Ойбот — дауыстық көмекші");
+  panel.className = "oyb-panel"; panel.setAttribute("aria-label", "Сақшы — дауыстық көмекші");
   panel.innerHTML = `
     <div class="oyb-top">
-      <span class="oyb-name">ОЙБОТ · AI</span>
+      <span class="oyb-name">САҚШЫ · AI</span>
       <div class="oyb-tools">
         ${Object.entries(LANGS).map(([k, v]) => `<button type="button" data-lang="${k}" aria-pressed="${k === lang}">${v.label}</button>`).join("")}
         <button type="button" class="oyb-sound" aria-pressed="${soundOn}" title="Дыбыс">🔊</button>
         <button type="button" class="oyb-close" aria-label="Жабу">✕</button>
       </div>
     </div>
-    <div class="oyb-stage" data-state="idle">${robotSVG(false)}<div class="oyb-status" aria-live="polite"></div></div>
+    <div class="oyb-stage" data-state="idle">${robotSVG(false)}<div class="oyb-status" aria-live="polite"></div><div class="oyb-engine"></div></div>
     <div class="oyb-log" aria-live="polite"></div>
     <div class="oyb-chips"></div>
     <form class="oyb-bar">
@@ -152,6 +153,13 @@
   const stage = $(".oyb-stage"), statusEl = $(".oyb-status"), log = $(".oyb-log"), input = $(".oyb-bar input");
   const micBtn = $(".oyb-mic"), sendBtn = $(".oyb-send"), chips = $(".oyb-chips");
   const T = () => LANGS[lang];
+  // Қай дауыс жүйесі жұмыс істеп тұрғанын көрсетеді (телефонда ақауды табу үшін)
+  let engineKey = "", engineExtra = "";
+  function setEngine(key, extra = "") {
+    engineKey = key; engineExtra = extra;
+    const e = T().eng, el = panel.querySelector(".oyb-engine");
+    if (el) el.textContent = key ? `${e.label}: ${e[key] || key}${extra ? " · " + extra : ""}` : "";
+  }
 
   function setState(s) {
     stage.dataset.state = s;
@@ -175,6 +183,7 @@
       b.onclick = () => { unlockAudio(); ask(q); }; chips.appendChild(b);
     });
     if (recog) recog.lang = T().code;
+    setEngine(engineKey, engineExtra);
     setState(stage.dataset.state || "idle");
   }
 
@@ -245,7 +254,7 @@
       if (onProgress && total) onProgress(got / total);
     }
     const blob = new Blob(chunks);
-    try { await cache.put(url, new Response(blob)); } catch (e) { console.warn("Ойбот: кэшке сақталмады", e); }
+    try { await cache.put(url, new Response(blob)); } catch (e) { console.warn("Сақшы: кэшке сақталмады", e); }
     return blob.arrayBuffer();
   }
   async function piperLoad(l) {
@@ -258,11 +267,12 @@
       piperState.phon = piperState.phon || await import(PIPER.phonemizer);
       const v = PIPER.voices[l], url = `${PIPER.models}/${v.path}`;
       const cfg = JSON.parse(new TextDecoder().decode(await cachedFetch(url + ".json")));
-      const model = await cachedFetch(url, (f) => { piperState.progress[l] = f; if (l === lang && stage.dataset.state !== "speaking") statusEl.textContent = `${T().voiceLoad} ${Math.round(f * 100)}%`; });
+      const model = await cachedFetch(url, (f) => { piperState.progress[l] = f; if (l === lang) setEngine(engineKey || "basic", `Piper ${T().eng.loading} ${Math.round(f * 100)}%`); if (l === lang && stage.dataset.state !== "speaking") statusEl.textContent = `${T().voiceLoad} ${Math.round(f * 100)}%`; });
       piperState.sessions[l] = await ort.InferenceSession.create(model);
       piperState.configs[l] = cfg;
+      if (l === lang) setEngine("piper", "✓");
       if (stage.dataset.state === "idle") setState("idle");
-    })().catch((e) => { console.warn("Ойбот: Piper жүктелмеді", e); piperState.loading[l] = null; throw e; });
+    })().catch((e) => { console.warn("Сақшы: Piper жүктелмеді", e); piperState.loading[l] = null; piperState.error = String(e.message || e).slice(0, 80); setEngine(engineKey || "basic", `${T().eng.fail}: ${piperState.error}`); throw e; });
     return piperState.loading[l];
   }
   function phonemize(text, espeakVoice) {
@@ -308,7 +318,7 @@
       when = Math.max(when, audioCtx.currentTime + 0.02);
       src.start(when); when += buf.duration + 0.12;
       piperSources.push(src); last = src;
-      if (!started) { started = true; setState("speaking"); lipSync(); }
+      if (!started) { started = true; setState("speaking"); setEngine("piper"); lipSync(); }
     }
     if (last) last.onended = () => { if (token === speakToken) { cancelAnimationFrame(rafId); stage.classList.remove("lipsync"); setState("idle"); } };
   }
@@ -361,7 +371,7 @@
     if (!r.ok) throw new Error("tts " + r.status);
     const blob = await r.blob();
     if (token !== speakToken) return;
-    serverTTS = true;
+    serverTTS = true; setEngine("azure");
     audioEl = new Audio(URL.createObjectURL(blob));
     audioEl.crossOrigin = "anonymous";
     try {
@@ -379,6 +389,10 @@
   function speakBrowser(text) {
     if (!synth) { setState("idle"); return; }
     const voice = pickVoice();
+    const pl = piperState.loading[lang] && !piperState.sessions[lang];
+    const pct = piperState.progress[lang] != null ? Math.round(piperState.progress[lang] * 100) + "%" : "";
+    setEngine(voice && /natural/i.test(voice.name) ? "natural" : "basic",
+      piperState.error ? `${T().eng.fail}: ${piperState.error}` : pl ? `Piper ${T().eng.loading} ${pct}`.trim() : (voice ? voice.name : ""));
     const parts = cleanForSpeech(text).match(/[^.!?]+[.!?]*/g) || [text];
     parts.forEach((p, i) => {
       const u = new SpeechSynthesisUtterance(p.trim());
@@ -396,13 +410,13 @@
     // 1) Azure (кілт қосылса)  2) браузердің табиғи дауысы (Edge)  3) Piper  4) браузердің қарапайым дауысы
     if (serverTTS !== false) {
       try { await speakServer(clean, token); return; }
-      catch (e) { console.info("Ойбот: сервер дауысы жоқ.", e.message); }
+      catch (e) { console.info("Сақшы: сервер дауысы жоқ.", e.message); }
     }
     if (token !== speakToken) return;
     if (!hasNaturalBrowserVoice() && piperSupported()) {
       if (piperState.sessions[lang]) {
         try { await speakPiper(clean, token); return; }
-        catch (e) { console.warn("Ойбот: Piper қатесі", e); }
+        catch (e) { console.warn("Сақшы: Piper қатесі", e); }
       } else {
         piperLoad(lang).catch(() => {});   // модель фонда жүктеле берсін, әзірге браузер дауысы
       }
@@ -461,7 +475,7 @@
       history.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
       speak(data.answer);
     } catch (e) {
-      console.warn("Ойбот:", e);
+      console.warn("Сақшы:", e);
       addMsg(T().err, "e"); setState("idle");
     } finally {
       busy = false; micBtn.disabled = sendBtn.disabled = false;
@@ -492,10 +506,11 @@
     if (panel.classList.contains("open")) prefetchVoice();
   }
   function prefetchVoice() {
+    if (!piperSupported() && navigator.connection && navigator.connection.saveData) setEngine("basic", "Data Saver");
     if (soundOn && serverTTS !== true && !hasNaturalBrowserVoice() && piperSupported()) piperLoad(lang).catch(() => {});
   }
   panel.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
-    // Сайттың тіл ауыстырғышы болса, бүкіл сайтты ауыстырамыз; ол "oyan:lang" оқиғасы арқылы Ойботқа қайтады
+    // Сайттың тіл ауыстырғышы болса, бүкіл сайтты ауыстырамыз; ол "oyan:lang" оқиғасы арқылы Сақшыға қайтады
     if (window.OyanI18n) window.OyanI18n.setLang(b.dataset.lang); else setLang(b.dataset.lang);
   });
   document.addEventListener("oyan:lang", (e) => setLang(e.detail));
@@ -504,7 +519,7 @@
     try { localStorage.setItem("oybot-sound", soundOn ? "on" : "off"); } catch {}
     if (!soundOn) { stopSpeaking(); setState("idle"); }
   };
-  window.Oybot = { open, close, ask, setLang, debug: { piperLoad, piperSynth, piperState, speak } };
+  window.Sakshy = window.Oybot = { open, close, ask, setLang, debug: { piperLoad, piperSynth, piperState, speak } };
 
   renderLang(); setState("idle");
 })();
