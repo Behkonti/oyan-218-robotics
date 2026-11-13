@@ -218,12 +218,12 @@
     ort: "https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.18.0/",
     phonemizer: "https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/dist/piper-DeOu3H9E.js",
     phonemizerFiles: "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize",
-    // Дауыстар: қазақшасы — ISSAI Iseke (x_low, 28 MB, жылдам), орысшасы — Dmitri, ағылшыншасы — Ryan.
-    // issai-high (128 MB) сапалырақ, бірақ GitHub Pages-те бір ядромен 2–3 есе баяу жұмыс істейді.
+    // Әйел дауыстары: қазақшасы — ISSAI Raya (x_low, 28 MB, жылдам), орысшасы — Irina, ағылшыншасы — Amy.
+    // speed — сөйлеу жылдамдығы (1 = модельдің өз жылдамдығы, 1.15 = 15% тезірек).
     voices: {
-      kk: { path: "kk/kk_KZ/iseke/x_low/kk_KZ-iseke-x_low.onnx", speaker: 0 },
-      ru: { path: "ru/ru_RU/dmitri/medium/ru_RU-dmitri-medium.onnx", speaker: 0 },
-      en: { path: "en/en_US/ryan/medium/en_US-ryan-medium.onnx", speaker: 0 },
+      kk: { path: "kk/kk_KZ/raya/x_low/kk_KZ-raya-x_low.onnx", speaker: 0, speed: 1.15 },
+      ru: { path: "ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx", speaker: 0, speed: 1.05 },
+      en: { path: "en/en_US/amy/medium/en_US-amy-medium.onnx", speaker: 0, speed: 1.0 },
     },
     cache: "oybot-piper-v1",
   };
@@ -292,7 +292,7 @@
     const feeds = {
       input: new ort.Tensor("int64", BigInt64Array.from(ids.map(BigInt)), [1, ids.length]),
       input_lengths: new ort.Tensor("int64", BigInt64Array.from([BigInt(ids.length)])),
-      scales: new ort.Tensor("float32", Float32Array.from([cfg.inference.noise_scale, cfg.inference.length_scale, cfg.inference.noise_w])),
+      scales: new ort.Tensor("float32", Float32Array.from([cfg.inference.noise_scale, cfg.inference.length_scale / (PIPER.voices[l].speed || 1), cfg.inference.noise_w])),
     };
     if (cfg.num_speakers > 1) feeds.sid = new ort.Tensor("int64", BigInt64Array.from([BigInt(PIPER.voices[l].speaker)]));
     const out = await session.run(feeds);
@@ -329,11 +329,74 @@
     const want = lang === "kk" ? ["kk", "ru"] : [lang];
     for (const w of want) {
       const list = voices.filter(v => v.lang.toLowerCase().startsWith(w));
-      const best = list.find(v => /natural|online|google/i.test(v.name)) || list[0];
+      const female = /aigul|svetlana|dariya|irina|ava|jenny|aria|emma|michelle|zira|female/i;
+      const best = list.find(v => /natural/i.test(v.name) && female.test(v.name)) || list.find(v => /natural|online|google/i.test(v.name)) || list[0];
       if (best) return best;
     }
     return null;
   }
+  // ---------- Ағылшын терминдерін дұрыс айту ----------
+  // Қазақ/орыс дауыстары латын әріптерін әріптеп немесе қате оқиды, сондықтан
+  // терминдерді алдымен кириллицамен «естілуі бойынша» жазамыз.
+  const SAY = {
+    kk: [
+      ["FIRST LEGO League Challenge", "Фёрст Лего Лиг Челлендж"], ["FIRST LEGO League", "Фёрст Лего Лиг"], ["LEGO", "Лего"],
+      ["Raspberry Pi", "Распберри Пай"], ["SPIKE Prime", "Спайк Прайм"], ["Pybricks", "Пайбрикс"], ["Supabase", "Супабейс"],
+      ["Environment Monitor", "Энвайронмент Монитор"], ["Innovation Project", "Инновейшн Проджект"], ["Robot Game", "Робот Гейм"],
+      ["Robot Design", "Робот Дизайн"], ["Core Values", "Кор Вэльюс"], ["Central Asia Regional", "Сентрал Эйжа Риджинал"],
+      ["Houston Qualifier", "Хьюстон Квалифайер"], ["Houston", "Хьюстон"], ["Boston University", "Бостон Юниверсити"],
+      ["Gyro Turn", "Джайро Тёрн"], ["Gyro Straight", "Джайро Стрейт"], ["GitHub", "Гитхаб"], ["Google", "Гугл"],
+      ["BIOGLOW", "Биоглоу"], ["OYAN", "Оян"], ["Robotics", "Роботикс"], ["Wi-Fi", "уай-фай"], ["WiFi", "уай-фай"],
+      ["BME280", "Би-эм-и 280"], ["CCS811", "Си-си-эс 811"], ["FC-22", "Эф-си 22"], ["eCO₂", "е-СО-екі"], ["eCO2", "е-СО-екі"],
+      ["CO₂", "көмірқышқыл газы"], ["CO2", "көмірқышқыл газы"], ["TVOC", "ти-ви-о-си"], ["ppm", "пи-пи-эм"], ["ppb", "пи-пи-би"],
+      ["hPa", "гектопаскаль"], ["°C", " градус"], ["FLL", "эф-эл-эл"], ["FTC", "эф-ти-си"], ["GPS", "джи-пи-эс"], ["AI", "жасанды интеллект"],
+      ["Sakshy", "Сақшы"], ["Senior programmer", "сеньор бағдарламашы"],
+    ],
+    ru: [
+      ["FIRST LEGO League Challenge", "Фёрст Лего Лиг Челлендж"], ["FIRST LEGO League", "Фёрст Лего Лиг"], ["LEGO", "Лего"],
+      ["Raspberry Pi", "Распберри Пай"], ["SPIKE Prime", "Спайк Прайм"], ["Pybricks", "Пайбрикс"], ["Supabase", "Супабейс"],
+      ["Environment Monitor", "Энвайронмент Монитор"], ["Innovation Project", "Инновейшн Проджект"], ["Robot Game", "Робот Гейм"],
+      ["Robot Design", "Робот Дизайн"], ["Core Values", "Кор Вэльюс"], ["Central Asia Regional", "Сентрал Эйжа Риджинал"],
+      ["Houston Qualifier", "Хьюстон Квалифайер"], ["Houston", "Хьюстон"], ["Boston University", "Бостонский университет"],
+      ["Gyro Turn", "Джайро Тёрн"], ["Gyro Straight", "Джайро Стрейт"], ["GitHub", "Гитхаб"], ["Google", "Гугл"],
+      ["BIOGLOW", "Биоглоу"], ["OYAN", "Оян"], ["Robotics", "Роботикс"], ["Wi-Fi", "вай-фай"], ["WiFi", "вай-фай"],
+      ["BME280", "Би-эм-и 280"], ["CCS811", "Си-си-эс 811"], ["FC-22", "Эф-си 22"], ["eCO₂", "э-це-о-два"], ["eCO2", "э-це-о-два"],
+      ["CO₂", "це-о-два"], ["CO2", "це-о-два"], ["TVOC", "ти-ви-о-си"], ["ppm", "пи-пи-эм"], ["ppb", "пи-пи-би"],
+      ["hPa", "гектопаскалей"], ["°C", " градусов"], ["FLL", "эф-эл-эл"], ["FTC", "эф-ти-си"], ["GPS", "джи-пи-эс"], ["AI", "искусственный интеллект"],
+      ["Sakshy", "Сакшы"], ["Senior programmer", "сеньор-программист"],
+    ],
+    en: [
+      ["Сақшы", "Sakshy"], ["Сакшы", "Sakshy"], ["OYAN", "Oyan"], ["Pybricks", "Pie-bricks"], ["CO₂", "C O 2"], ["eCO₂", "e C O 2"],
+      ["°C", " degrees Celsius"], ["hPa", "hectopascals"], ["ppm", "p p m"], ["ppb", "p p b"],
+    ],
+  };
+  const LETTER = { A: "эй", B: "би", C: "си", D: "ди", E: "и", F: "эф", G: "джи", H: "эйч", I: "ай", J: "джей", K: "кей", L: "эл", M: "эм",
+    N: "эн", O: "оу", P: "пи", Q: "кью", R: "ар", S: "эс", T: "ти", U: "ю", V: "ви", W: "дабл-ю", X: "экс", Y: "уай", Z: "зед" };
+  const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const SAY_RE = {};
+  for (const l of Object.keys(SAY)) {
+    SAY[l].sort((a, b) => b[0].length - a[0].length);
+    SAY_RE[l] = SAY[l].map(([from, to]) => [new RegExp(`(^|[^A-Za-z0-9])${escRe(from)}(?![A-Za-z0-9])`, "g"), to]);
+  }
+  // Сөздікте жоқ латын сөздерді кириллицаға шамамен аударамыз (әріптеп оқымауы үшін)
+  function latinToCyr(w) {
+    if (/^[A-Z]{2,5}$/.test(w)) return w.split("").map((c) => LETTER[c]).join("-");   // қысқартулар: AI → эй-ай
+    let t = w.toLowerCase();
+    const pairs = [["sch", "ш"], ["tion", "шн"], ["sh", "ш"], ["ch", "ч"], ["th", "т"], ["ph", "ф"], ["oo", "у"], ["ee", "и"], ["ea", "и"],
+      ["ou", "ау"], ["ck", "к"], ["qu", "кв"], ["ya", "я"], ["yu", "ю"], ["yo", "ё"], ["zh", "ж"], ["kh", "х"], ["ts", "ц"]];
+    for (const [a, b] of pairs) t = t.split(a).join(b);
+    const one = { a: "а", b: "б", c: "к", d: "д", e: "е", f: "ф", g: "г", h: "х", i: "и", j: "дж", k: "к", l: "л", m: "м", n: "н", o: "о",
+      p: "п", q: "к", r: "р", s: "с", t: "т", u: "у", v: "в", w: "у", x: "кс", y: "и", z: "з" };
+    t = t.replace(/c(?=[eiy])/g, "с").replace(/[a-z]/g, (ch) => one[ch] || ch);
+    return w[0] === w[0].toUpperCase() ? t[0].toUpperCase() + t.slice(1) : t;
+  }
+  function prepForSpeech(text, l) {
+    let t = text;
+    for (const [re, to] of SAY_RE[l] || []) t = t.replace(re, (m, pre) => pre + to);
+    if (l !== "en") t = t.replace(/[A-Za-z][A-Za-z']*/g, latinToCyr);
+    return t.replace(/\s+/g, " ").trim();
+  }
+
   function cleanForSpeech(t) {
     return t.replace(/https?:\/\/\S+/g, "").replace(/[*_#`>|]/g, "").replace(/\s+/g, " ").trim();
   }
@@ -393,7 +456,7 @@
     const pct = piperState.progress[lang] != null ? Math.round(piperState.progress[lang] * 100) + "%" : "";
     setEngine(voice && /natural/i.test(voice.name) ? "natural" : "basic",
       piperState.error ? `${T().eng.fail}: ${piperState.error}` : pl ? `Piper ${T().eng.loading} ${pct}`.trim() : (voice ? voice.name : ""));
-    const parts = cleanForSpeech(text).match(/[^.!?]+[.!?]*/g) || [text];
+    const parts = prepForSpeech(cleanForSpeech(text), lang).match(/[^.!?]+[.!?]*/g) || [text];
     parts.forEach((p, i) => {
       const u = new SpeechSynthesisUtterance(p.trim());
       if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = T().code;
@@ -406,7 +469,7 @@
     stopSpeaking();
     if (!soundOn) { setState("idle"); return; }
     const token = speakToken;
-    const clean = cleanForSpeech(text);
+    const clean = prepForSpeech(cleanForSpeech(text), lang);
     // 1) Azure (кілт қосылса)  2) браузердің табиғи дауысы (Edge)  3) Piper  4) браузердің қарапайым дауысы
     if (serverTTS !== false) {
       try { await speakServer(clean, token); return; }
@@ -519,7 +582,7 @@
     try { localStorage.setItem("oybot-sound", soundOn ? "on" : "off"); } catch {}
     if (!soundOn) { stopSpeaking(); setState("idle"); }
   };
-  window.Sakshy = window.Oybot = { open, close, ask, setLang, debug: { piperLoad, piperSynth, piperState, speak } };
+  window.Sakshy = window.Oybot = { open, close, ask, setLang, debug: { piperLoad, piperSynth, piperState, speak, prepForSpeech } };
 
   renderLang(); setState("idle");
 })();
