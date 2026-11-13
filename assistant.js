@@ -197,16 +197,17 @@
     ort: "https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.18.0/",
     phonemizer: "https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/dist/piper-DeOu3H9E.js",
     phonemizerFiles: "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize",
-    // Дауыстар: қазақшасы — IS2AI issai (high, 6 дикторлы), орысшасы — Dmitri, ағылшыншасы — Ryan
+    // Дауыстар: қазақшасы — ISSAI Iseke (x_low, 28 MB, жылдам), орысшасы — Dmitri, ағылшыншасы — Ryan.
+    // issai-high (128 MB) сапалырақ, бірақ GitHub Pages-те бір ядромен 2–3 есе баяу жұмыс істейді.
     voices: {
-      kk: { path: "kk/kk_KZ/issai/high/kk_KZ-issai-high.onnx", speaker: 0 },
+      kk: { path: "kk/kk_KZ/iseke/x_low/kk_KZ-iseke-x_low.onnx", speaker: 0 },
       ru: { path: "ru/ru_RU/dmitri/medium/ru_RU-dmitri-medium.onnx", speaker: 0 },
       en: { path: "en/en_US/ryan/medium/en_US-ryan-medium.onnx", speaker: 0 },
     },
     cache: "oybot-piper-v1",
   };
   const piperState = { sessions: {}, configs: {}, loading: {}, progress: {}, phon: null, failed: false };
-  // Мобильді трафикті үнемдеу режимінде 128 MB модельді жүктемейміз
+  // Мобильді трафикті үнемдеу режимінде дауыс модельдерін жүктемейміз
   const piperSupported = () => typeof WebAssembly === "object" && "caches" in window && !piperState.failed &&
     !(navigator.connection && navigator.connection.saveData);
 
