@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>OYAN · Админ-панель</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=PT+Sans:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0a2622; --bg2:#0e302a; --panel:#123a33; --line:#24524a;
+  --text:#eef4ec; --muted:#a3bdb3; --gold:#d8b46a; --glow:#7fe0ad; --bad:#ef7d7d;
+  --display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --body:"PT Sans","Segoe UI",Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 var(--body)}
+h1,h2{font-family:var(--display);margin:0}
+.wrap{max-width:960px;margin:0 auto;padding:24px 18px 60px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+.mark{font:800 16px var(--display)}.mark b{background:var(--gold);color:var(--bg);padding:4px 9px;border-radius:7px;margin-right:6px}
+.muted{color:var(--muted);font-size:14px}
+button,.btn{font:700 14px var(--body);border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--text);text-decoration:none}
+button.primary{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+button.danger{color:var(--bad);border-color:#6b3d3d;background:transparent}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,textarea:focus-visible,.tab:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+input,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px;color:var(--text);font:15px var(--body)}
+textarea{min-height:70px;resize:vertical}
+label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.login{max-width:380px;margin:60px auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;display:grid;gap:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.tab{border:1px solid var(--line);background:transparent;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+.list{display:grid;gap:10px}
+.row{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:10px}
+.row.new{border-style:dashed;border-color:var(--gold);background:var(--bg2)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.fields .wide{grid-column:1/-1}
+.actions{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.photo{display:flex;align-items:center;gap:10px}
+.photo img,.photo .ph{width:48px;height:48px;border-radius:50%;object-fit:cover;flex:none;background:var(--gold);color:var(--bg);display:grid;place-items:center;font:800 14px var(--display)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:14px;display:none;max-width:90vw}
+.toast.ok{border-color:var(--glow);display:block}.toast.err{border-color:var(--bad);color:#ffc4c4;display:block}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="mark"><b>OYAN</b>Админ-панель</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="muted" id="who"></span>
+      <a class="btn" href="index.html" target="_blank" rel="noopener">Сайтты ашу</a>
+      <button id="logout" class="hidden" type="button">Шығу</button>
+    </div>
+  </div>
+
+  <form class="login" id="loginForm">
+    <h2 style="font-size:20px">Кіру</h2>
+    <label for="email">Email<input id="email" type="email" autocomplete="username" required></label>
+    <label for="password">Құпиясөз<input id="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit" id="loginBtn">Кіру</button>
+    <div class="muted" id="loginMsg"></div>
+  </form>
+
+  <div id="app" class="hidden">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <p class="muted" id="hint" style="margin:0 0 14px"></p>
+    <div class="list" id="list"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// monitor.html-дегімен бірдей кілттер (publishable — сайтқа қоюға болады)
+const SUPABASE_URL = "https://vefpwvirxdeswutrhpqs.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV";
+const PHOTO_BUCKET = "team-photos";
+
+const SECTIONS = {
+  team_members: {
+    title: "Команда", order: ["sort", true],
+    hint: "Мүшелер сайтта «Реттік нөмір» бойынша шығады. Сурет жүктесеңіз, аватардың орнында көрінеді.",
+    fields: [
+      { key: "name", label: "Аты-жөні", required: true },
+      { key: "role", label: "Рөлі (мысалы, Team captain)" },
+      { key: "sort", label: "Реттік нөмір", type: "number" },
+      { key: "photo_url", label: "Сурет", type: "photo" },
+    ],
+  },
+  meetings: {
+    title: "Кездесулер", order: ["date", false],
+    hint: "Сайттағы «Кездесулер журналы». Жаңасы жоғарыда шығады.",
+    fields: [
+      { key: "date", label: "Күні", type: "date", required: true },
+      { key: "title", label: "Тақырыбы" },
+      { key: "description", label: "Не талқыланды, нәтижесі", type: "textarea", wide: true },
+    ],
+  },
+  experts: {
+    title: "Сарапшылар", order: ["sort", true],
+    hint: "Команда кездескен мамандар мен командалар.",
+    fields: [
+      { key: "name", label: "Аты-жөні", required: true },
+      { key: "role", label: "Кім (мамандығы)" },
+      { key: "sort", label: "Реттік нөмір", type: "number" },
+    ],
+  },
+  social_links: {
+    title: "Сілтемелер", order: ["sort", true],
+    hint: "Сілтемесі бос желі сайтта көрсетілмейді.",
+    fields: [
+      { key: "name", label: "Атауы", required: true },
+      { key: "url", label: "Сілтеме (https://...)", type: "url" },
+      { key: "sort", label: "Реттік нөмір", type: "number" },
+    ],
+  },
+};
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const $ = (id) => document.getElementById(id);
+let current = "team_members";
+
+function toast(text, ok = true) {
+  const t = $("toast"); t.textContent = text; t.className = "toast " + (ok ? "ok" : "err");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.className = "toast", 3500);
+}
+
+// ---------- Кіру ----------
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("loginBtn").disabled = true; $("loginMsg").textContent = "";
+  const { error } = await db.auth.signInWithPassword({ email: $("email").value.trim(), password: $("password").value });
+  $("loginBtn").disabled = false;
+  if (error) $("loginMsg").textContent = "Кіру мүмкін болмады: email немесе құпиясөз қате.";
+});
+$("logout").addEventListener("click", () => db.auth.signOut());
+
+// onAuthStateChange ішінде тікелей await жасауға болмайды (supabase-js тұрып қалуы мүмкін), сондықтан setTimeout
+db.auth.onAuthStateChange((_event, session) => { setTimeout(() => handleSession(session), 0); });
+async function handleSession(session) {
+  if (!session) { showLogin(); return; }
+  const { data: isAdmin, error } = await db.rpc("is_admin");
+  if (error || !isAdmin) {
+    await db.auth.signOut();
+    $("loginMsg").textContent = "Бұл аккаунттың сайтты өзгертуге рұқсаты жоқ. admins кестесіне email қосу керек.";
+    return;
+  }
+  $("who").textContent = session.user.email;
+  $("loginForm").classList.add("hidden"); $("app").classList.remove("hidden"); $("logout").classList.remove("hidden");
+  renderTabs(); loadSection();
+}
+function showLogin() {
+  $("loginForm").classList.remove("hidden"); $("app").classList.add("hidden"); $("logout").classList.add("hidden"); $("who").textContent = "";
+}
+
+// ---------- Бөлімдер ----------
+function renderTabs() {
+  $("tabs").innerHTML = "";
+  for (const [key, s] of Object.entries(SECTIONS)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tab"; b.textContent = s.title; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", key === current);
+    b.onclick = () => { current = key; renderTabs(); loadSection(); };
+    $("tabs").appendChild(b);
+  }
+}
+
+async function loadSection() {
+  const s = SECTIONS[current];
+  $("hint").textContent = s.hint;
+  $("list").innerHTML = '<p class="muted">Жүктелуде…</p>';
+  const { data, error } = await db.from(current).select("*").order(s.order[0], { ascending: s.order[1] }).order("id");
+  if (error) { $("list").innerHTML = ""; toast("Жүктеу қатесі: " + error.message, false); return; }
+  $("list").innerHTML = "";
+  $("list").appendChild(rowEl(s, null));
+  data.forEach(r => $("list").appendChild(rowEl(s, r)));
+}
+
+function rowEl(s, record) {
+  const isNew = !record;
+  const row = document.createElement("form");
+  row.className = "row" + (isNew ? " new" : "");
+  const uid = isNew ? "new" : record.id;
+  const fields = document.createElement("div");
+  fields.className = "fields";
+  if (isNew) { const h = document.createElement("div"); h.className = "wide"; h.innerHTML = '<strong>+ Жаңасын қосу</strong>'; fields.appendChild(h); }
+
+  for (const f of s.fields) {
+    const id = `${current}-${uid}-${f.key}`;
+    const label = document.createElement("label");
+    label.htmlFor = id; label.textContent = f.label;
+    if (f.wide || f.type === "photo") label.className = "wide";
+    let input;
+    if (f.type === "textarea") input = document.createElement("textarea");
+    else { input = document.createElement("input"); input.type = f.type === "photo" ? "hidden" : (f.type || "text"); }
+    input.id = id; input.name = f.key;
+    if (f.required) input.required = true;
+    input.value = record?.[f.key] ?? (f.type === "number" ? "0" : "");
+    if (f.type === "photo") {
+      const box = document.createElement("div"); box.className = "photo";
+      const preview = () => {
+        const old = box.querySelector("img,.ph"); if (old) old.remove();
+        let el;
+        if (input.value) { el = document.createElement("img"); el.src = input.value; el.alt = ""; }
+        else { el = document.createElement("div"); el.className = "ph"; el.textContent = "—"; }
+        box.prepend(el);
+      };
+      const file = document.createElement("input");
+      file.type = "file"; file.accept = "image/*"; file.id = id + "-file"; file.style.maxWidth = "260px";
+      file.onchange = async () => {
+        const f0 = file.files[0]; if (!f0) return;
+        if (f0.size > 3 * 1024 * 1024) { toast("Сурет 3 МБ-тан аспасын", false); return; }
+        const path = `${Date.now()}-${f0.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        const { error } = await db.storage.from(PHOTO_BUCKET).upload(path, f0, { upsert: false, contentType: f0.type });
+        if (error) { toast("Сурет жүктелмеді: " + error.message, false); return; }
+        input.value = db.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+        preview(); toast("Сурет жүктелді. Сақтау батырмасын басыңыз.");
+      };
+      const clear = document.createElement("button");
+      clear.type = "button"; clear.textContent = "Суретті алып тастау";
+      clear.onclick = () => { input.value = ""; preview(); };
+      box.append(file, clear, input); preview();
+      label.appendChild(box);
+    } else label.appendChild(input);
+    fields.appendChild(label);
+  }
+
+  const actions = document.createElement("div"); actions.className = "actions";
+  const save = document.createElement("button"); save.className = "primary"; save.type = "submit";
+  save.textContent = isNew ? "Қосу" : "Сақтау";
+  actions.appendChild(save);
+  if (!isNew) {
+    const del = document.createElement("button"); del.type = "button"; del.className = "danger"; del.textContent = "Өшіру";
+    del.onclick = () => {
+      if (del.dataset.confirm) return remove(record.id);
+      del.dataset.confirm = "1"; del.textContent = "Иә, өшіру";
+      setTimeout(() => { delete del.dataset.confirm; del.textContent = "Өшіру"; }, 4000);
+    };
+    actions.prepend(del);
+  }
+  row.append(fields, actions);
+
+  row.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const values = {};
+    for (const f of s.fields) {
+      const v = row.elements[f.key].value.trim();
+      values[f.key] = f.type === "number" ? Number(v || 0) : v;
+    }
+    save.disabled = true;
+    const q = isNew ? db.from(current).insert(values) : db.from(current).update(values).eq("id", record.id);
+    const { error } = await q;
+    save.disabled = false;
+    if (error) { toast("Сақталмады: " + error.message, false); return; }
+    toast(isNew ? "Қосылды" : "Сақталды");
+    if (isNew) loadSection();
+  });
+  return row;
+}
+
+async function remove(id) {
+  const { error } = await db.from(current).delete().eq("id", id);
+  if (error) { toast("Өшірілмеді: " + error.message, false); return; }
+  toast("Өшірілді"); loadSection();
+}
+</script>
+</body>
+</html>

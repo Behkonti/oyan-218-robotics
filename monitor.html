@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080e19">
+  <title>Environment Monitor · Behkonti</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#080e19;--panel:#111b2b;--line:#223149;--text:#edf4ff;--muted:#91a2ba;--green:#57d6a0;--cyan:#62c7ee;--amber:#f4bd67;--red:#f07878}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#14243a 0,transparent 38%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{max-width:1180px;margin:auto;padding:32px 22px 48px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px}
+    .brand{display:flex;align-items:center;gap:13px}.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(145deg,#1d8e76,#235d91);display:grid;place-items:center;font-size:22px}
+    h1{font-size:21px;letter-spacing:-.5px;margin:0}.sub{color:var(--muted);font-size:12px;margin-top:3px}.status{display:flex;align-items:center;gap:9px;border:1px solid var(--line);background:#101a29;border-radius:999px;padding:8px 12px;color:var(--muted);font-size:12px}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--amber)}.status.online .dot{background:var(--green);box-shadow:0 0 12px #57d6a077}.status.offline .dot{background:var(--red)}
+    .intro{display:flex;justify-content:space-between;align-items:end;gap:18px;margin:0 0 18px}.eyebrow{color:var(--green);font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase}
+    h2{font-size:25px;letter-spacing:-.8px;margin:5px 0 0}.updated{color:var(--muted);font-size:12px;text-align:right}
+    .notice{border:1px solid var(--line);background:#101a29;color:var(--muted);border-radius:12px;padding:11px 14px;margin-bottom:18px;font-size:12px}.notice.error{border-color:#754141;background:#2a171b;color:#ffc4c4}.alert-panel{border:1px solid var(--line);background:#101a29;border-radius:14px;padding:14px 16px;margin:-5px 0 18px}.alert-panel.has-alert{border-color:#8a4a35;background:#291b19}.alert-title{font-weight:700;margin-bottom:7px}.alert-list{margin:0;padding-left:19px;color:#ffc4c4}.alert-empty{color:var(--green)}.notify-btn{border:1px solid #36516d;background:#17283d;color:var(--text);padding:9px 12px;border-radius:10px;cursor:pointer;font:inherit;font-size:12px}.notify-btn:hover{background:#203750}.top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.card{background:linear-gradient(160deg,#142033,#101827);border:1px solid var(--line);border-radius:16px;padding:17px;min-height:142px}
+    .cardhead{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px}.ico{width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:#203047;color:var(--cyan);font-size:15px}
+    .value{font-size:29px;font-weight:650;letter-spacing:-1px;margin:14px 0 1px}.unit{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0}.hint{font-size:11px;color:var(--muted)}
+    .lower{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:13px}.section{background:linear-gradient(160deg,#142033,#101827);border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}
+    .section h3{font-size:14px;margin:0}.sectionhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}.tag{border:1px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--muted);font-size:10px}
+    .location{margin-top:13px}.loc-body{display:grid;grid-template-columns:2fr 1fr;gap:14px}#map{height:300px;border-radius:12px;border:1px solid var(--line);background:#0d1624}
+    .loc-info{display:grid;gap:9px;align-content:start}.loc-row{display:flex;justify-content:space-between;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:#0d1624;font-size:12px}.loc-row span{color:var(--muted)}.loc-row b{text-align:right;font-variant-numeric:tabular-nums}
+    .loc-link{color:var(--cyan);font-size:12px}.leaflet-container{font:inherit}@media(max-width:900px){.loc-body{grid-template-columns:1fr}}
+    .chart-wrap{height:230px;position:relative}.sensors{display:grid;gap:10px}.sensor{display:flex;align-items:center;justify-content:space-between;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:#0d1624}.sensorname{font-size:12px;font-weight:600}.sensordesc{font-size:10px;color:var(--muted)}
+    .pill{font-size:10px;border-radius:99px;padding:4px 8px;color:var(--amber);background:#3a2b18}.pill.ok{color:#9af0c9;background:#15382e}.pill.bad{color:#ffc4c4;background:#401f25}
+    .assistant{margin-top:13px}.chat-log{height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px}
+    .msg{max-width:85%;padding:10px 13px;border-radius:13px;white-space:pre-wrap;word-wrap:break-word;font-size:13px}.msg.user{align-self:flex-end;background:#1d4466;border:1px solid #2c5d86}
+    .msg.bot{align-self:flex-start;background:#0d1624;border:1px solid var(--line)}.msg.err{align-self:flex-start;background:#2a171b;border:1px solid #754141;color:#ffc4c4}.msg.typing{color:var(--muted);font-style:italic}
+    .chips{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 11px}.chip{border:1px solid var(--line);background:#101a29;color:var(--muted);border-radius:999px;padding:6px 11px;font:inherit;font-size:11px;cursor:pointer}.chip:hover{color:var(--text);border-color:#36516d}
+    .chat-form{display:flex;gap:9px}.chat-form input{flex:1;min-width:0;background:#0d1624;border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--text);font:inherit}.chat-form input:focus{outline:none;border-color:var(--cyan)}
+    .chat-form button{border:0;background:linear-gradient(145deg,#1d8e76,#235d91);color:#fff;border-radius:10px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer}.chat-form button:disabled{opacity:.5;cursor:default}
+    footer{display:flex;justify-content:space-between;gap:12px;margin-top:22px;color:#71839c;font-size:11px}
+    @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.lower{grid-template-columns:1fr}}
+    @media(max-width:540px){.wrap{padding:22px 14px 36px}.top{align-items:flex-start;flex-direction:column}.intro{align-items:flex-start;flex-direction:column}.updated{text-align:left}.grid{gap:9px}.card{padding:13px;min-height:132px}.value{font-size:25px}h2{font-size:22px}footer{flex-direction:column}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div class="brand"><a href="index.html" style="color:var(--muted);text-decoration:none;font-size:12px;margin-right:6px">← OYAN</a><div class="logo">⌁</div><div><h1>Environment Monitor</h1><div class="sub">Behkonti · Raspberry Pi 4</div></div></div>
+    <div class="top-actions"><button class="notify-btn" id="enableNotifications" type="button">Включить уведомления</button>
+    <div class="status" id="connectionStatus"><span class="dot"></span><span id="connection">Подключение…</span></div></div>
+  </header>
+  <section class="intro">
+    <div><div class="eyebrow">Environmental monitoring</div><h2>Панель мониторинга</h2></div>
+    <div class="updated">Последнее измерение<br><strong id="lastUpdate">—</strong></div>
+  </section>
+  <div class="notice" id="notice">Загрузка показаний из Supabase…</div>
+  <section class="alert-panel" id="alertPanel" aria-live="polite"><div class="alert-title">Предупреждения</div><div class="alert-empty">Активных предупреждений нет</div></section>
+  <section class="grid" aria-label="Показания датчиков">
+    <article class="card"><div class="cardhead"><span>Температура</span><span class="ico">🌡</span></div><div class="value" id="temperature">— <span class="unit">°C</span></div><div class="hint">BME280</div></article>
+    <article class="card"><div class="cardhead"><span>Влажность</span><span class="ico">💧</span></div><div class="value" id="humidity">— <span class="unit">%</span></div><div class="hint">BME280</div></article>
+    <article class="card"><div class="cardhead"><span>Давление</span><span class="ico">◉</span></div><div class="value" id="pressure">— <span class="unit">hPa</span></div><div class="hint">BME280</div></article>
+    <article class="card"><div class="cardhead"><span>Газовый датчик</span><span class="ico">⌁</span></div><div class="value" id="gas">—</div><div class="hint">FC-22 · цифровой выход</div></article>
+    <article class="card"><div class="cardhead"><span>eCO₂</span><span class="ico">◌</span></div><div class="value" id="eco2">— <span class="unit">ppm</span></div><div class="hint">CCS811 · расчётная оценка</div></article>
+    <article class="card"><div class="cardhead"><span>TVOC</span><span class="ico">〰</span></div><div class="value" id="tvoc">— <span class="unit">ppb</span></div><div class="hint">CCS811</div></article>
+    <article class="card"><div class="cardhead"><span>Записей в истории</span><span class="ico">▤</span></div><div class="value" id="records">—</div><div class="hint">Последние измерения</div></article>
+    <article class="card"><div class="cardhead"><span>Устройство</span><span class="ico">▣</span></div><div class="value" style="font-size:20px" id="device">Ожидание</div><div class="hint">Raspberry Pi 4</div></article>
+  </section>
+  <section class="lower">
+    <article class="section"><div class="sectionhead"><h3>Температура и влажность</h3><span class="tag">Последние 100 записей</span></div><div class="chart-wrap"><canvas id="climateChart"></canvas></div></article>
+    <article class="section"><div class="sectionhead"><h3>eCO₂ и TVOC</h3><span class="tag">CCS811</span></div><div class="chart-wrap"><canvas id="airChart"></canvas></div></article>
+    <article class="section"><div class="sectionhead"><h3>Давление</h3><span class="tag">BME280 · hPa</span></div><div class="chart-wrap"><canvas id="pressureChart"></canvas></div></article>
+    <article class="section"><div class="sectionhead"><h3>Состояние датчиков</h3><span class="tag">По последней записи</span></div><div class="sensors">
+      <div class="sensor"><div><div class="sensorname">BME280</div><div class="sensordesc">Температура · влажность · давление</div></div><span class="pill" id="bmeStatus">Ожидание</span></div>
+      <div class="sensor"><div><div class="sensorname">FC-22</div><div class="sensordesc">Цифровой выход</div></div><span class="pill" id="gasStatus">Ожидание</span></div>
+      <div class="sensor"><div><div class="sensorname">CCS811</div><div class="sensordesc">eCO₂ · TVOC · опционально</div></div><span class="pill" id="ccsStatus">Ожидание</span></div>
+    </div></article>
+  </section>
+  <section class="section location" aria-label="Местоположение устройства">
+    <div class="sectionhead"><h3>Местоположение устройства</h3><span class="tag" id="locTag">Wi-Fi геолокация</span></div>
+    <div class="loc-body">
+      <div id="map" role="img" aria-label="Карта с местоположением устройства"></div>
+      <div class="loc-info">
+        <div class="loc-row"><span>Координаты</span><b id="locCoords">—</b></div>
+        <div class="loc-row"><span>Точность</span><b id="locAcc">—</b></div>
+        <div class="loc-row"><span>Способ</span><b id="locSrc">—</b></div>
+        <div class="loc-row"><span>Обновлено</span><b id="locTime">—</b></div>
+        <div class="loc-row"><span>Wi-Fi сетей</span><b id="locWifi">—</b></div>
+        <a class="loc-link" id="locLink" href="#" target="_blank" rel="noopener" hidden>Открыть в Google Maps →</a>
+        <div class="hint" id="locNote">Координаты определяются по окружающим Wi-Fi сетям и обновляются раз в несколько минут.</div>
+      </div>
+    </div>
+  </section>
+  <footer><span>Environment Monitor · Behkonti</span><span>Автообновление каждые 5 секунд</span></footer>
+</main>
+<script>
+  // Publishable key is designed for use in a public website. Never put a secret/service-role key here.
+  const SUPABASE_URL = "https://vefpwvirxdeswutrhpqs.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV";
+  const REFRESH_MS = 5000;
+  const $ = (id) => document.getElementById(id);
+  let climateChart, airChart, pressureChart;
+  // Демонстрационные пороги проекта; их можно изменить здесь.
+  const THRESHOLDS = { temperature: 35, eco2: 1000, tvoc: 500 };
+  let activeAlertIds = new Set();
+
+  function getAlerts(row) {
+    const alerts = [];
+    if (row.gas_detected === true) alerts.push({ id: "gas", text: "FC-22: датчик сообщил об обнаружении газа." });
+    if (row.temperature != null && Number(row.temperature) > THRESHOLDS.temperature)
+      alerts.push({ id: "temperature", text: "Высокая температура: " + numberOrDash(row.temperature) + " °C (порог " + THRESHOLDS.temperature + " °C)." });
+    if (row.ccs811_available && row.eco2 != null && Number(row.eco2) > THRESHOLDS.eco2)
+      alerts.push({ id: "eco2", text: "Повышенный eCO₂: " + numberOrDash(row.eco2, 0) + " ppm (порог " + THRESHOLDS.eco2 + " ppm)." });
+    if (row.ccs811_available && row.tvoc != null && Number(row.tvoc) > THRESHOLDS.tvoc)
+      alerts.push({ id: "tvoc", text: "Повышенный TVOC: " + numberOrDash(row.tvoc, 0) + " ppb (порог " + THRESHOLDS.tvoc + " ppb)." });
+    return alerts;
+  }
+  function updateAlerts(row, fresh) {
+    const alerts = fresh ? getAlerts(row) : [];
+    const panel = $("alertPanel");
+    panel.classList.toggle("has-alert", alerts.length > 0);
+    if (!fresh) {
+      panel.innerHTML = '<div class="alert-title">Предупреждения</div><div class="alert-empty">Нет свежих показаний. Проверь подключение Raspberry Pi.</div>';
+      activeAlertIds = new Set();
+      return;
+    }
+    if (alerts.length === 0) {
+      panel.innerHTML = '<div class="alert-title">Предупреждения</div><div class="alert-empty">Активных предупреждений нет</div>';
+    } else {
+      panel.innerHTML = '<div class="alert-title">⚠ Активные предупреждения</div><ul class="alert-list">' +
+        alerts.map(a => '<li>' + a.text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;") + '</li>').join("") +
+        '</ul>';
+    }
+    const currentIds = new Set(alerts.map(a => a.id));
+    for (const alert of alerts) {
+      if (!activeAlertIds.has(alert.id) && "Notification" in window && Notification.permission === "granted") {
+        new Notification("Environment Monitor", { body: alert.text, tag: "environment-" + alert.id });
+      }
+    }
+    activeAlertIds = currentIds;
+  }
+  $("enableNotifications").addEventListener("click", async () => {
+    if (!("Notification" in window)) {
+      $("enableNotifications").textContent = "Браузер не поддерживает";
+      return;
+    }
+    if (Notification.permission === "granted") {
+      $("enableNotifications").textContent = "Уведомления включены";
+      return;
+    }
+    if (Notification.permission === "denied") {
+      $("enableNotifications").textContent = "Разрешите в настройках браузера";
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    $("enableNotifications").textContent = permission === "granted"
+      ? "Уведомления включены"
+      : "Уведомления не разрешены";
+  });
+
+  function setStatus(online, text) {
+    const el = $("connectionStatus");
+    el.className = "status " + (online ? "online" : "offline");
+    $("connection").textContent = text;
+  }
+  function setPill(id, text, state) {
+    const el = $(id);
+    el.textContent = text;
+    el.className = "pill" + (state ? " " + state : "");
+  }
+  function numberOrDash(value, digits = 1) {
+    return value === null || value === undefined || value === "" || !Number.isFinite(Number(value))
+      ? "—" : Number(value).toFixed(digits);
+  }
+  function chartOptions() {
+    return {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { labels: { color: "#c7d4e6", usePointStyle: true, boxWidth: 7 } } },
+      scales: {
+        x: { ticks: { color: "#91a2ba", maxTicksLimit: 7 }, grid: { color: "#26364b" } },
+        y: { ticks: { color: "#91a2ba" }, grid: { color: "#26364b" } }
+      }
+    };
+  }
+  function makeChart(canvasId, datasets) {
+    return new Chart($(canvasId), { type: "line", data: { labels: [], datasets }, options: chartOptions() });
+  }
+  function initCharts() {
+    if (!window.Chart) {
+      $("notice").textContent = "Не загрузилась библиотека графиков. Проверь подключение к интернету.";
+      return;
+    }
+    climateChart = makeChart("climateChart", [
+      { label: "Температура °C", data: [], borderColor: "#62c7ee", backgroundColor: "#62c7ee22", tension: .3, yAxisID: "y", pointRadius: 0 },
+      { label: "Влажность %", data: [], borderColor: "#57d6a0", backgroundColor: "#57d6a022", tension: .3, yAxisID: "y1", pointRadius: 0 }
+    ]);
+    climateChart.options.scales.y1 = { position: "right", ticks: { color: "#91a2ba" }, grid: { drawOnChartArea: false } };
+    airChart = makeChart("airChart", [
+      { label: "eCO₂ ppm", data: [], borderColor: "#f4bd67", tension: .3, pointRadius: 0 },
+      { label: "TVOC ppb", data: [], borderColor: "#d28cf0", tension: .3, pointRadius: 0 }
+    ]);
+    pressureChart = makeChart("pressureChart", [
+      { label: "Давление hPa", data: [], borderColor: "#62c7ee", backgroundColor: "#62c7ee22", fill: true, tension: .3, pointRadius: 0 }
+    ]);
+  }
+  function updateCharts(rows) {
+    if (!climateChart || !airChart || !pressureChart) return;
+    const ordered = [...rows].reverse();
+    const labels = ordered.map(r => new Date(r.created_at).toLocaleTimeString("ru-RU", {hour:"2-digit",minute:"2-digit",second:"2-digit"}));
+    climateChart.data.labels = labels;
+    climateChart.data.datasets[0].data = ordered.map(r => r.temperature);
+    climateChart.data.datasets[1].data = ordered.map(r => r.humidity);
+    climateChart.update();
+    airChart.data.labels = labels;
+    airChart.data.datasets[0].data = ordered.map(r => r.ccs811_available ? r.eco2 : null);
+    airChart.data.datasets[1].data = ordered.map(r => r.ccs811_available ? r.tvoc : null);
+    airChart.update();
+    pressureChart.data.labels = labels;
+    pressureChart.data.datasets[0].data = ordered.map(r => r.pressure);
+    pressureChart.update();
+  }
+  async function loadData() {
+    if (SUPABASE_PUBLISHABLE_KEY === "PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE") {
+      setStatus(false, "Нужен Publishable key");
+      $("notice").className = "notice error";
+      $("notice").textContent = "В index.html ещё не вставлен Publishable key Supabase. Вставь его в переменную SUPABASE_PUBLISHABLE_KEY.";
+      return;
+    }
+    const url = SUPABASE_URL + "/rest/v1/sensor_data?select=created_at,temperature,humidity,pressure,gas_detected,ccs811_available,eco2,tvoc&order=created_at.desc&limit=100";
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "apikey": SUPABASE_PUBLISHABLE_KEY,
+          "Authorization": "Bearer " + SUPABASE_PUBLISHABLE_KEY
+        }
+      });
+      const rows = await response.json();
+      if (!response.ok) {
+        const message = rows.message || rows.error || ("HTTP " + response.status);
+        throw new Error(message);
+      }
+      if (!Array.isArray(rows) || rows.length === 0) {
+        setStatus(false, "Нет измерений");
+        $("notice").className = "notice";
+        $("notice").textContent = "Подключение к Supabase есть, но таблица sensor_data пока не содержит записей.";
+        $("device").textContent = "Нет данных";
+        return;
+      }
+      const latest = rows[0];
+      const date = new Date(latest.created_at);
+      const fresh = Date.now() - date.getTime() < 30000;
+      updateAlerts(latest, fresh);
+      setStatus(true, fresh ? "Данные поступают" : "Последняя запись устарела");
+      $("notice").className = "notice";
+      $("notice").textContent = fresh
+        ? "Сайт подключён к Supabase. Показания обновляются автоматически."
+        : "Данные получены, но последняя запись старше 30 секунд. Проверь, работает ли скрипт на Raspberry Pi.";
+      $("lastUpdate").textContent = date.toLocaleString("ru-RU");
+      $("temperature").innerHTML = numberOrDash(latest.temperature) + ' <span class="unit">°C</span>';
+      $("humidity").innerHTML = numberOrDash(latest.humidity) + ' <span class="unit">%</span>';
+      $("pressure").innerHTML = numberOrDash(latest.pressure, 1) + ' <span class="unit">hPa</span>';
+      $("gas").textContent = latest.gas_detected === true ? "Обнаружен" : latest.gas_detected === false ? "Не обнаружен" : "—";
+      $("eco2").innerHTML = latest.ccs811_available && latest.eco2 != null ? numberOrDash(latest.eco2, 0) + ' <span class="unit">ppm</span>' : '— <span class="unit">ppm</span>';
+      $("tvoc").innerHTML = latest.ccs811_available && latest.tvoc != null ? numberOrDash(latest.tvoc, 0) + ' <span class="unit">ppb</span>' : '— <span class="unit">ppb</span>';
+      $("records").textContent = rows.length;
+      $("device").textContent = fresh ? "В сети" : "Нет связи";
+      setPill("bmeStatus", latest.temperature != null && latest.humidity != null && latest.pressure != null ? "Работает" : "Нет данных", latest.temperature != null ? "ok" : "bad");
+      setPill("gasStatus", latest.gas_detected === null ? "Нет данных" : "Данные есть", latest.gas_detected === null ? "" : "ok");
+      setPill("ccsStatus", latest.ccs811_available ? "Работает" : "Не обнаружен", latest.ccs811_available ? "ok" : "");
+      updateCharts(rows);
+    } catch (error) {
+      setStatus(false, "Ошибка подключения");
+      $("notice").className = "notice error";
+      $("notice").textContent = "Не удалось получить данные: " + error.message;
+    }
+  }
+
+  // ---------- Местоположение (таблица device_locations) ----------
+  const SOURCE_NAMES = { "google-wifi": "Wi-Fi (Google)", "beacondb-wifi": "Wi-Fi (beaconDB)", "beacondb-approx": "Приблизительно (IP / сотовая сеть)", "gps": "GPS" };
+  let map, marker, circle, lastLocId = null;
+  function initMap() {
+    if (!window.L) { $("locNote").textContent = "Не загрузилась библиотека карты. Проверь подключение к интернету."; return; }
+    map = L.map("map", { zoomControl: true, attributionControl: true }).setView([48, 67], 4); // Казахстан
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
+  }
+  async function loadLocation() {
+    try {
+      const r = await fetch(SUPABASE_URL + "/rest/v1/device_locations?select=*&order=created_at.desc&limit=1", {
+        cache: "no-store", headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY }
+      });
+      const rows = await r.json();
+      if (!r.ok) throw new Error(rows.message || ("HTTP " + r.status));
+      const loc = rows[0];
+      if (!loc) { $("locNote").textContent = "Данных о местоположении пока нет. Запусти location_sender.py на Raspberry Pi."; return; }
+      $("locCoords").textContent = Number(loc.latitude).toFixed(5) + ", " + Number(loc.longitude).toFixed(5);
+      $("locAcc").textContent = loc.accuracy_m != null ? "± " + Math.round(loc.accuracy_m) + " м" : "—";
+      $("locSrc").textContent = SOURCE_NAMES[loc.source] || loc.source || "—";
+      $("locTime").textContent = new Date(loc.created_at).toLocaleString("ru-RU");
+      $("locWifi").textContent = loc.wifi_count ?? "—";
+      $("locLink").href = "https://www.google.com/maps?q=" + loc.latitude + "," + loc.longitude;
+      $("locLink").hidden = false;
+      const ageMin = (Date.now() - new Date(loc.created_at).getTime()) / 60000;
+      $("locTag").textContent = ageMin > 15 ? "Данные устарели" : "Wi-Fi геолокация";
+      if (map && loc.id !== lastLocId) {
+        lastLocId = loc.id;
+        const pos = [loc.latitude, loc.longitude];
+        if (!marker) { marker = L.marker(pos).addTo(map); circle = L.circle(pos, { radius: loc.accuracy_m || 50, color: "#62c7ee", weight: 1, fillOpacity: .12 }).addTo(map); }
+        else { marker.setLatLng(pos); circle.setLatLng(pos).setRadius(loc.accuracy_m || 50); }
+        marker.bindPopup("Raspberry Pi 4<br>" + $("locTime").textContent);
+        map.fitBounds(circle.getBounds(), { maxZoom: 17 });
+      }
+    } catch (error) {
+      $("locNote").textContent = "Не удалось получить местоположение: " + error.message;
+    }
+  }
+  initMap();
+  loadLocation();
+  setInterval(loadLocation, 30000);
+
+  initCharts();
+  loadData();
+  setInterval(loadData, REFRESH_MS);
+</script>
+<script src="assistant.js" data-url="https://vefpwvirxdeswutrhpqs.supabase.co" data-key="sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV" defer></script>
+</body>
+</html>
