@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#080e19">
   <title>Environment Monitor · Behkonti</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="i18n.js"></script>
+  <script src="i18n-monitor.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -34,6 +36,7 @@
     .chips{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 11px}.chip{border:1px solid var(--line);background:#101a29;color:var(--muted);border-radius:999px;padding:6px 11px;font:inherit;font-size:11px;cursor:pointer}.chip:hover{color:var(--text);border-color:#36516d}
     .chat-form{display:flex;gap:9px}.chat-form input{flex:1;min-width:0;background:#0d1624;border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--text);font:inherit}.chat-form input:focus{outline:none;border-color:var(--cyan)}
     .chat-form button{border:0;background:linear-gradient(145deg,#1d8e76,#235d91);color:#fff;border-radius:10px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer}.chat-form button:disabled{opacity:.5;cursor:default}
+    .langs{display:flex;gap:3px;border:1px solid var(--line);border-radius:10px;padding:3px;background:#101a29}.langs button{background:transparent;border:0;color:var(--muted);font:700 11px inherit;padding:5px 8px;border-radius:7px;cursor:pointer}.langs button[aria-pressed="true"]{background:#d8b46a;color:#0a2622}
     footer{display:flex;justify-content:space-between;gap:12px;margin-top:22px;color:#71839c;font-size:11px}
     @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.lower{grid-template-columns:1fr}}
     @media(max-width:540px){.wrap{padding:22px 14px 36px}.top{align-items:flex-start;flex-direction:column}.intro{align-items:flex-start;flex-direction:column}.updated{text-align:left}.grid{gap:9px}.card{padding:13px;min-height:132px}.value{font-size:25px}h2{font-size:22px}footer{flex-direction:column}}
@@ -43,7 +46,7 @@
 <main class="wrap">
   <header class="top">
     <div class="brand"><a href="index.html" style="color:var(--muted);text-decoration:none;font-size:12px;margin-right:6px">← OYAN</a><div class="logo">⌁</div><div><h1>Environment Monitor</h1><div class="sub">Behkonti · Raspberry Pi 4</div></div></div>
-    <div class="top-actions"><button class="notify-btn" id="enableNotifications" type="button">Включить уведомления</button>
+    <div class="top-actions"><div class="langs" id="langSwitch" role="group" aria-label="Язык"></div><button class="notify-btn" id="enableNotifications" type="button">Включить уведомления</button>
     <div class="status" id="connectionStatus"><span class="dot"></span><span id="connection">Подключение…</span></div></div>
   </header>
   <section class="intro">
@@ -95,6 +98,8 @@
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV";
   const REFRESH_MS = 5000;
   const $ = (id) => document.getElementById(id);
+  const t = (s) => window.OyanI18n ? OyanI18n.t(s) : s;
+  const LOCALE = () => ({ kk: "kk-KZ", ru: "ru-RU", en: "en-GB" }[window.OyanI18n ? OyanI18n.lang : "ru"]);
   let climateChart, airChart, pressureChart;
   // Демонстрационные пороги проекта; их можно изменить здесь.
   const THRESHOLDS = { temperature: 35, eco2: 1000, tvoc: 500 };
@@ -102,13 +107,13 @@
 
   function getAlerts(row) {
     const alerts = [];
-    if (row.gas_detected === true) alerts.push({ id: "gas", text: "FC-22: датчик сообщил об обнаружении газа." });
+    if (row.gas_detected === true) alerts.push({ id: "gas", text: t("FC-22: датчик сообщил об обнаружении газа.") });
     if (row.temperature != null && Number(row.temperature) > THRESHOLDS.temperature)
-      alerts.push({ id: "temperature", text: "Высокая температура: " + numberOrDash(row.temperature) + " °C (порог " + THRESHOLDS.temperature + " °C)." });
+      alerts.push({ id: "temperature", text: t("Высокая температура: ") + numberOrDash(row.temperature) + t(" °C (порог ") + THRESHOLDS.temperature + " °C)." });
     if (row.ccs811_available && row.eco2 != null && Number(row.eco2) > THRESHOLDS.eco2)
-      alerts.push({ id: "eco2", text: "Повышенный eCO₂: " + numberOrDash(row.eco2, 0) + " ppm (порог " + THRESHOLDS.eco2 + " ppm)." });
+      alerts.push({ id: "eco2", text: t("Повышенный eCO₂: ") + numberOrDash(row.eco2, 0) + t(" ppm (порог ") + THRESHOLDS.eco2 + " ppm)." });
     if (row.ccs811_available && row.tvoc != null && Number(row.tvoc) > THRESHOLDS.tvoc)
-      alerts.push({ id: "tvoc", text: "Повышенный TVOC: " + numberOrDash(row.tvoc, 0) + " ppb (порог " + THRESHOLDS.tvoc + " ppb)." });
+      alerts.push({ id: "tvoc", text: t("Повышенный TVOC: ") + numberOrDash(row.tvoc, 0) + t(" ppb (порог ") + THRESHOLDS.tvoc + " ppb)." });
     return alerts;
   }
   function updateAlerts(row, fresh) {
@@ -116,14 +121,14 @@
     const panel = $("alertPanel");
     panel.classList.toggle("has-alert", alerts.length > 0);
     if (!fresh) {
-      panel.innerHTML = '<div class="alert-title">Предупреждения</div><div class="alert-empty">Нет свежих показаний. Проверь подключение Raspberry Pi.</div>';
+      panel.innerHTML = t('<div class="alert-title">Предупреждения</div><div class="alert-empty">Нет свежих показаний. Проверь подключение Raspberry Pi.</div>');
       activeAlertIds = new Set();
       return;
     }
     if (alerts.length === 0) {
-      panel.innerHTML = '<div class="alert-title">Предупреждения</div><div class="alert-empty">Активных предупреждений нет</div>';
+      panel.innerHTML = t('<div class="alert-title">Предупреждения</div><div class="alert-empty">Активных предупреждений нет</div>');
     } else {
-      panel.innerHTML = '<div class="alert-title">⚠ Активные предупреждения</div><ul class="alert-list">' +
+      panel.innerHTML = t('<div class="alert-title">⚠ Активные предупреждения</div><ul class="alert-list">') +
         alerts.map(a => '<li>' + a.text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;") + '</li>').join("") +
         '</ul>';
     }
@@ -137,21 +142,21 @@
   }
   $("enableNotifications").addEventListener("click", async () => {
     if (!("Notification" in window)) {
-      $("enableNotifications").textContent = "Браузер не поддерживает";
+      $("enableNotifications").textContent = t("Браузер не поддерживает");
       return;
     }
     if (Notification.permission === "granted") {
-      $("enableNotifications").textContent = "Уведомления включены";
+      $("enableNotifications").textContent = t("Уведомления включены");
       return;
     }
     if (Notification.permission === "denied") {
-      $("enableNotifications").textContent = "Разрешите в настройках браузера";
+      $("enableNotifications").textContent = t("Разрешите в настройках браузера");
       return;
     }
     const permission = await Notification.requestPermission();
     $("enableNotifications").textContent = permission === "granted"
-      ? "Уведомления включены"
-      : "Уведомления не разрешены";
+      ? t("Уведомления включены")
+      : t("Уведомления не разрешены");
   });
 
   function setStatus(online, text) {
@@ -184,12 +189,12 @@
   }
   function initCharts() {
     if (!window.Chart) {
-      $("notice").textContent = "Не загрузилась библиотека графиков. Проверь подключение к интернету.";
+      $("notice").textContent = t("Не загрузилась библиотека графиков. Проверь подключение к интернету.");
       return;
     }
     climateChart = makeChart("climateChart", [
-      { label: "Температура °C", data: [], borderColor: "#62c7ee", backgroundColor: "#62c7ee22", tension: .3, yAxisID: "y", pointRadius: 0 },
-      { label: "Влажность %", data: [], borderColor: "#57d6a0", backgroundColor: "#57d6a022", tension: .3, yAxisID: "y1", pointRadius: 0 }
+      { label: t("Температура °C"), data: [], borderColor: "#62c7ee", backgroundColor: "#62c7ee22", tension: .3, yAxisID: "y", pointRadius: 0 },
+      { label: t("Влажность %"), data: [], borderColor: "#57d6a0", backgroundColor: "#57d6a022", tension: .3, yAxisID: "y1", pointRadius: 0 }
     ]);
     climateChart.options.scales.y1 = { position: "right", ticks: { color: "#91a2ba" }, grid: { drawOnChartArea: false } };
     airChart = makeChart("airChart", [
@@ -197,13 +202,13 @@
       { label: "TVOC ppb", data: [], borderColor: "#d28cf0", tension: .3, pointRadius: 0 }
     ]);
     pressureChart = makeChart("pressureChart", [
-      { label: "Давление hPa", data: [], borderColor: "#62c7ee", backgroundColor: "#62c7ee22", fill: true, tension: .3, pointRadius: 0 }
+      { label: t("Давление hPa"), data: [], borderColor: "#62c7ee", backgroundColor: "#62c7ee22", fill: true, tension: .3, pointRadius: 0 }
     ]);
   }
   function updateCharts(rows) {
     if (!climateChart || !airChart || !pressureChart) return;
     const ordered = [...rows].reverse();
-    const labels = ordered.map(r => new Date(r.created_at).toLocaleTimeString("ru-RU", {hour:"2-digit",minute:"2-digit",second:"2-digit"}));
+    const labels = ordered.map(r => new Date(r.created_at).toLocaleTimeString(LOCALE(), {hour:"2-digit",minute:"2-digit",second:"2-digit"}));
     climateChart.data.labels = labels;
     climateChart.data.datasets[0].data = ordered.map(r => r.temperature);
     climateChart.data.datasets[1].data = ordered.map(r => r.humidity);
@@ -218,9 +223,9 @@
   }
   async function loadData() {
     if (SUPABASE_PUBLISHABLE_KEY === "PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE") {
-      setStatus(false, "Нужен Publishable key");
+      setStatus(false, t("Нужен Publishable key"));
       $("notice").className = "notice error";
-      $("notice").textContent = "В index.html ещё не вставлен Publishable key Supabase. Вставь его в переменную SUPABASE_PUBLISHABLE_KEY.";
+      $("notice").textContent = t("В index.html ещё не вставлен Publishable key Supabase. Вставь его в переменную SUPABASE_PUBLISHABLE_KEY.");
       return;
     }
     const url = SUPABASE_URL + "/rest/v1/sensor_data?select=created_at,temperature,humidity,pressure,gas_detected,ccs811_available,eco2,tvoc&order=created_at.desc&limit=100";
@@ -239,38 +244,38 @@
         throw new Error(message);
       }
       if (!Array.isArray(rows) || rows.length === 0) {
-        setStatus(false, "Нет измерений");
+        setStatus(false, t("Нет измерений"));
         $("notice").className = "notice";
-        $("notice").textContent = "Подключение к Supabase есть, но таблица sensor_data пока не содержит записей.";
-        $("device").textContent = "Нет данных";
+        $("notice").textContent = t("Подключение к Supabase есть, но таблица sensor_data пока не содержит записей.");
+        $("device").textContent = t("Нет данных");
         return;
       }
       const latest = rows[0];
       const date = new Date(latest.created_at);
       const fresh = Date.now() - date.getTime() < 30000;
       updateAlerts(latest, fresh);
-      setStatus(true, fresh ? "Данные поступают" : "Последняя запись устарела");
+      setStatus(true, fresh ? t("Данные поступают") : t("Последняя запись устарела"));
       $("notice").className = "notice";
       $("notice").textContent = fresh
-        ? "Сайт подключён к Supabase. Показания обновляются автоматически."
-        : "Данные получены, но последняя запись старше 30 секунд. Проверь, работает ли скрипт на Raspberry Pi.";
-      $("lastUpdate").textContent = date.toLocaleString("ru-RU");
+        ? t("Сайт подключён к Supabase. Показания обновляются автоматически.")
+        : t("Данные получены, но последняя запись старше 30 секунд. Проверь, работает ли скрипт на Raspberry Pi.");
+      $("lastUpdate").textContent = date.toLocaleString(LOCALE());
       $("temperature").innerHTML = numberOrDash(latest.temperature) + ' <span class="unit">°C</span>';
       $("humidity").innerHTML = numberOrDash(latest.humidity) + ' <span class="unit">%</span>';
       $("pressure").innerHTML = numberOrDash(latest.pressure, 1) + ' <span class="unit">hPa</span>';
-      $("gas").textContent = latest.gas_detected === true ? "Обнаружен" : latest.gas_detected === false ? "Не обнаружен" : "—";
+      $("gas").textContent = latest.gas_detected === true ? t("Обнаружен") : latest.gas_detected === false ? t("Не обнаружен") : "—";
       $("eco2").innerHTML = latest.ccs811_available && latest.eco2 != null ? numberOrDash(latest.eco2, 0) + ' <span class="unit">ppm</span>' : '— <span class="unit">ppm</span>';
       $("tvoc").innerHTML = latest.ccs811_available && latest.tvoc != null ? numberOrDash(latest.tvoc, 0) + ' <span class="unit">ppb</span>' : '— <span class="unit">ppb</span>';
       $("records").textContent = rows.length;
-      $("device").textContent = fresh ? "В сети" : "Нет связи";
-      setPill("bmeStatus", latest.temperature != null && latest.humidity != null && latest.pressure != null ? "Работает" : "Нет данных", latest.temperature != null ? "ok" : "bad");
-      setPill("gasStatus", latest.gas_detected === null ? "Нет данных" : "Данные есть", latest.gas_detected === null ? "" : "ok");
-      setPill("ccsStatus", latest.ccs811_available ? "Работает" : "Не обнаружен", latest.ccs811_available ? "ok" : "");
+      $("device").textContent = fresh ? t("В сети") : t("Нет связи");
+      setPill("bmeStatus", latest.temperature != null && latest.humidity != null && latest.pressure != null ? t("Работает") : t("Нет данных"), latest.temperature != null ? "ok" : "bad");
+      setPill("gasStatus", latest.gas_detected === null ? t("Нет данных") : t("Данные есть"), latest.gas_detected === null ? "" : "ok");
+      setPill("ccsStatus", latest.ccs811_available ? t("Работает") : t("Не обнаружен"), latest.ccs811_available ? "ok" : "");
       updateCharts(rows);
     } catch (error) {
-      setStatus(false, "Ошибка подключения");
+      setStatus(false, t("Ошибка подключения"));
       $("notice").className = "notice error";
-      $("notice").textContent = "Не удалось получить данные: " + error.message;
+      $("notice").textContent = t("Не удалось получить данные: ") + error.message;
     }
   }
 
@@ -278,7 +283,7 @@
   const SOURCE_NAMES = { "google-wifi": "Wi-Fi (Google)", "beacondb-wifi": "Wi-Fi (beaconDB)", "beacondb-approx": "Приблизительно (IP / сотовая сеть)", "gps": "GPS" };
   let map, marker, circle, lastLocId = null;
   function initMap() {
-    if (!window.L) { $("locNote").textContent = "Не загрузилась библиотека карты. Проверь подключение к интернету."; return; }
+    if (!window.L) { $("locNote").textContent = t("Не загрузилась библиотека карты. Проверь подключение к интернету."); return; }
     map = L.map("map", { zoomControl: true, attributionControl: true }).setView([48, 67], 4); // Казахстан
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
   }
@@ -290,16 +295,16 @@
       const rows = await r.json();
       if (!r.ok) throw new Error(rows.message || ("HTTP " + r.status));
       const loc = rows[0];
-      if (!loc) { $("locNote").textContent = "Данных о местоположении пока нет. Запусти location_sender.py на Raspberry Pi."; return; }
+      if (!loc) { $("locNote").textContent = t("Данных о местоположении пока нет. Запусти location_sender.py на Raspberry Pi."); return; }
       $("locCoords").textContent = Number(loc.latitude).toFixed(5) + ", " + Number(loc.longitude).toFixed(5);
-      $("locAcc").textContent = loc.accuracy_m != null ? "± " + Math.round(loc.accuracy_m) + " м" : "—";
-      $("locSrc").textContent = SOURCE_NAMES[loc.source] || loc.source || "—";
-      $("locTime").textContent = new Date(loc.created_at).toLocaleString("ru-RU");
+      $("locAcc").textContent = loc.accuracy_m != null ? "± " + Math.round(loc.accuracy_m) + t(" м") : "—";
+      $("locSrc").textContent = t(SOURCE_NAMES[loc.source] || loc.source) || "—";
+      $("locTime").textContent = new Date(loc.created_at).toLocaleString(LOCALE());
       $("locWifi").textContent = loc.wifi_count ?? "—";
       $("locLink").href = "https://www.google.com/maps?q=" + loc.latitude + "," + loc.longitude;
       $("locLink").hidden = false;
       const ageMin = (Date.now() - new Date(loc.created_at).getTime()) / 60000;
-      $("locTag").textContent = ageMin > 15 ? "Данные устарели" : "Wi-Fi геолокация";
+      $("locTag").textContent = ageMin > 15 ? t("Данные устарели") : t("Wi-Fi геолокация");
       if (map && loc.id !== lastLocId) {
         lastLocId = loc.id;
         const pos = [loc.latitude, loc.longitude];
@@ -309,9 +314,21 @@
         map.fitBounds(circle.getBounds(), { maxZoom: 17 });
       }
     } catch (error) {
-      $("locNote").textContent = "Не удалось получить местоположение: " + error.message;
+      $("locNote").textContent = t("Не удалось получить местоположение: ") + error.message;
     }
   }
+  // Тіл ауыстыру: бет түпнұсқасы орысша, аудармалар i18n-monitor.js файлында
+  OyanI18n.init({
+    base: "ru",
+    dict: window.OYAN_DICT_MONITOR,
+    onChange: () => {
+      if (!climateChart) return;
+      climateChart.data.datasets[0].label = t("Температура °C");
+      climateChart.data.datasets[1].label = t("Влажность %");
+      pressureChart.data.datasets[0].label = t("Давление hPa");
+      loadData(); loadLocation();
+    },
+  });
   initMap();
   loadLocation();
   setInterval(loadLocation, 30000);

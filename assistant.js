@@ -8,27 +8,30 @@
   const SUPABASE_URL = me?.dataset.url || "https://vefpwvirxdeswutrhpqs.supabase.co";
   const KEY = me?.dataset.key || "";
   const ASK_URL = SUPABASE_URL + "/functions/v1/ask";
+  const TTS_URL = SUPABASE_URL + "/functions/v1/tts";
 
   const LANGS = {
-    kk: { code: "kk-KZ", label: "ҚАЗ", hello: "Сәлем! Мен Ойботпын, OYAN командасының көмекшісімін. Команда, жоба, робот немесе датчиктер туралы сұраңыз.",
+    kk: { code: "kk-KZ", label: "ҚАЗ", name: "Ойбот", open: "Ойботпен сөйлесу", hello: "Сәлем! Мен Ойботпын, OYAN командасының көмекшісімін. Команда, жоба, робот немесе датчиктер туралы сұраңыз.",
           placeholder: "Сұрағыңызды жазыңыз…", listen: "Тыңдап тұрмын…", think: "Ойланып жатырмын…", speak: "Сөйлеп тұрмын", idle: "Сұрақ қойыңыз",
           noMic: "Дауыспен сұрау үшін Chrome немесе Edge браузерін қолданыңыз.", denied: "Микрофонға рұқсат беріңіз (адрес жолағындағы құлып белгісі).",
           err: "Кешіріңіз, қазір жауап бере алмадым. Сәлден соң қайталап көріңіз.",
           chips: ["OYAN командасы туралы айтып бер", "Сіздің жобаңыз не туралы?", "Қазір температура қанша?", "Робот қалай жұмыс істейді?"] },
-    ru: { code: "ru-RU", label: "РУС", hello: "Привет! Я Ойбот, помощник команды OYAN. Спросите о команде, проекте, роботе или датчиках.",
+    ru: { code: "ru-RU", label: "РУС", name: "Ойбот", open: "Поговорить с Ойботом", hello: "Привет! Я Ойбот, помощник команды OYAN. Спросите о команде, проекте, роботе или датчиках.",
           placeholder: "Напишите вопрос…", listen: "Слушаю…", think: "Думаю…", speak: "Говорю", idle: "Задайте вопрос",
           noMic: "Для голосового ввода откройте сайт в Chrome или Edge.", denied: "Разрешите доступ к микрофону (значок замка в адресной строке).",
           err: "Извините, сейчас не получилось ответить. Попробуйте чуть позже.",
           chips: ["Расскажи о команде OYAN", "О чём ваш проект?", "Какая сейчас температура?", "Как устроен робот?"] },
-    en: { code: "en-US", label: "ENG", hello: "Hi! I'm Oybot, the OYAN team assistant. Ask me about the team, the project, the robot or the sensors.",
+    en: { code: "en-US", label: "ENG", name: "Oybot", open: "Talk to Oybot", hello: "Hi! I'm Oybot, the OYAN team assistant. Ask me about the team, the project, the robot or the sensors.",
           placeholder: "Type your question…", listen: "Listening…", think: "Thinking…", speak: "Speaking", idle: "Ask me anything",
           noMic: "Voice input works in Chrome or Edge.", denied: "Please allow microphone access (lock icon in the address bar).",
           err: "Sorry, I couldn't answer right now. Please try again shortly.",
           chips: ["Tell me about team OYAN", "What is your project about?", "What's the temperature now?", "How does the robot work?"] },
   };
 
+  // Тіл сайтпен ортақ: index.html/monitor.html тіл ауыстырғышы "oyan-lang" кілтін және "oyan:lang" оқиғасын қолданады
   let lang = "kk";
-  try { lang = localStorage.getItem("oybot-lang") || "kk"; } catch {}
+  try { lang = localStorage.getItem("oyan-lang") || localStorage.getItem("oybot-lang") || "kk"; } catch {}
+  if (!["kk", "ru", "en"].includes(lang)) lang = "kk";
   let soundOn = true;
   try { soundOn = localStorage.getItem("oybot-sound") !== "off"; } catch {}
   const history = [];
@@ -71,6 +74,7 @@
   [data-state="speaking"] .oyb-mouth rect{animation:oyb-talk .38s infinite alternate}
   [data-state="speaking"] .oyb-mouth rect:nth-child(2){animation-delay:.1s}[data-state="speaking"] .oyb-mouth rect:nth-child(3){animation-delay:.2s}[data-state="speaking"] .oyb-mouth rect:nth-child(4){animation-delay:.05s}
   @keyframes oyb-talk{from{transform:scaleY(.25)}to{transform:scaleY(1)}}
+  .oyb-stage.lipsync[data-state="speaking"] .oyb-mouth rect{animation:none;transition:transform .06s}
   .oyb-ring{opacity:0;transition:opacity .3s}
   [data-state="listening"] .oyb-ring{opacity:1;animation:oyb-ring 1.4s infinite}
   @keyframes oyb-ring{0%{transform:scale(.92);opacity:.9}100%{transform:scale(1.12);opacity:0}}
@@ -162,6 +166,9 @@
   function renderLang() {
     panel.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
     input.placeholder = T().placeholder;
+    fab.querySelector(".oyb-badge").textContent = T().name;
+    fab.setAttribute("aria-label", T().open);
+    panel.querySelector(".oyb-name").textContent = T().name.toUpperCase() + " · AI";
     chips.innerHTML = "";
     T().chips.forEach(q => {
       const b = document.createElement("button"); b.type = "button"; b.textContent = q;
@@ -172,10 +179,15 @@
   }
 
   // ---------- Дауыспен оқу (TTS) ----------
+  // 1) Сервердегі табиғи нейрон дауыс (Azure, "tts" функциясы) — таза қазақ/орыс/ағылшын дауысы.
+  // 2) Ол қосылмаған болса — браузердің өз дауысы (сапасы төмен).
   const synth = window.speechSynthesis;
   let voices = [];
   const loadVoices = () => { voices = synth ? synth.getVoices() : []; };
   if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
+  let serverTTS = null;          // null = әлі белгісіз, false = қосылмаған
+  let audioEl = null, audioCtx = null, analyser = null, rafId = 0, speakToken = 0;
+  const mouthRects = () => stage.querySelectorAll(".oyb-mouth rect");
 
   function pickVoice() {
     const want = lang === "kk" ? ["kk", "ru"] : [lang];
@@ -189,20 +201,75 @@
   function cleanForSpeech(t) {
     return t.replace(/https?:\/\/\S+/g, "").replace(/[*_#`>|]/g, "").replace(/\s+/g, " ").trim();
   }
-  function speak(text) {
-    if (!soundOn || !synth) { setState("idle"); return; }
-    synth.cancel();
+  function stopSpeaking() {
+    speakToken++;
+    if (synth) synth.cancel();
+    if (audioEl) { audioEl.pause(); audioEl.src = ""; audioEl = null; }
+    cancelAnimationFrame(rafId);
+    stage.classList.remove("lipsync");
+    mouthRects().forEach(r => r.style.transform = "");
+  }
+  function lipSync() {
+    if (!analyser) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const rects = mouthRects();
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      rects.forEach((r, i) => {
+        const band = data.slice(2 + i * 6, 8 + i * 6);
+        const lvl = band.reduce((a, b) => a + b, 0) / band.length / 255;
+        r.style.transform = `scaleY(${(0.2 + Math.min(1, lvl * 1.6) * 0.8).toFixed(2)})`;
+      });
+      rafId = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+  async function speakServer(text, token) {
+    const r = await fetch(TTS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY },
+      body: JSON.stringify({ text, lang }),
+    });
+    if (r.status === 503) { serverTTS = false; throw new Error("tts off"); }
+    if (!r.ok) throw new Error("tts " + r.status);
+    const blob = await r.blob();
+    if (token !== speakToken) return;
+    serverTTS = true;
+    audioEl = new Audio(URL.createObjectURL(blob));
+    audioEl.crossOrigin = "anonymous";
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+      const src = audioCtx.createMediaElementSource(audioEl);
+      analyser = audioCtx.createAnalyser(); analyser.fftSize = 64;
+      src.connect(analyser); analyser.connect(audioCtx.destination);
+      stage.classList.add("lipsync");
+    } catch { analyser = null; }
+    audioEl.onplay = () => { setState("speaking"); lipSync(); };
+    audioEl.onended = audioEl.onerror = () => { cancelAnimationFrame(rafId); stage.classList.remove("lipsync"); setState("idle"); };
+    await audioEl.play();
+  }
+  function speakBrowser(text) {
+    if (!synth) { setState("idle"); return; }
     const voice = pickVoice();
-    // Chrome ұзын мәтінді ортасынан үзіп тастамауы үшін сөйлемдерге бөлеміз
-    const parts = cleanForSpeech(text).match(/[^.!?。]+[.!?。]*/g) || [text];
+    const parts = cleanForSpeech(text).match(/[^.!?]+[.!?]*/g) || [text];
     parts.forEach((p, i) => {
       const u = new SpeechSynthesisUtterance(p.trim());
       if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = T().code;
-      u.rate = 1.0; u.pitch = 1.05;
       if (i === 0) u.onstart = () => setState("speaking");
       if (i === parts.length - 1) { u.onend = () => setState("idle"); u.onerror = () => setState("idle"); }
       synth.speak(u);
     });
+  }
+  async function speak(text) {
+    stopSpeaking();
+    if (!soundOn) { setState("idle"); return; }
+    const token = speakToken;
+    if (serverTTS !== false) {
+      try { await speakServer(cleanForSpeech(text), token); return; }
+      catch (e) { console.info("Ойбот: сервер дауысы жоқ, браузер дауысы қолданылады.", e.message); }
+    }
+    if (token === speakToken) speakBrowser(text);
   }
 
   // ---------- Дауысты тану (STT) ----------
@@ -231,7 +298,7 @@
   micBtn.onclick = () => {
     if (!recog) { addMsg(T().noMic, "e"); return; }
     if (recognizing) { recog.stop(); return; }
-    if (synth) synth.cancel();
+    stopSpeaking();
     try { recog.lang = T().code; recog.start(); } catch {}
   };
 
@@ -240,7 +307,7 @@
     question = String(question || "").trim();
     if (!question || busy) return;
     busy = true; micBtn.disabled = sendBtn.disabled = true;
-    if (synth) synth.cancel();
+    stopSpeaking();
     addMsg(question, "u"); input.value = "";
     setState("thinking");
     try {
@@ -271,21 +338,28 @@
   }
   function close() {
     panel.classList.remove("open"); fab.style.display = "";
-    if (synth) synth.cancel(); if (recognizing) recog.stop(); setState("idle");
+    stopSpeaking(); if (recognizing) recog.stop(); setState("idle");
   }
   fab.onclick = open;
   $(".oyb-close").onclick = close;
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && panel.classList.contains("open")) close(); });
-  panel.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
-    lang = b.dataset.lang; try { localStorage.setItem("oybot-lang", lang); } catch {}
+  function setLang(l) {
+    if (!LANGS[l] || l === lang) return;
+    lang = l; stopSpeaking(); setState("idle");
+    try { localStorage.setItem("oyan-lang", lang); } catch {}
     renderLang();
+  }
+  panel.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
+    // Сайттың тіл ауыстырғышы болса, бүкіл сайтты ауыстырамыз; ол "oyan:lang" оқиғасы арқылы Ойботқа қайтады
+    if (window.OyanI18n) window.OyanI18n.setLang(b.dataset.lang); else setLang(b.dataset.lang);
   });
+  document.addEventListener("oyan:lang", (e) => setLang(e.detail));
   $(".oyb-sound").onclick = (e) => {
     soundOn = !soundOn; e.currentTarget.setAttribute("aria-pressed", soundOn);
     try { localStorage.setItem("oybot-sound", soundOn ? "on" : "off"); } catch {}
-    if (!soundOn && synth) { synth.cancel(); setState("idle"); }
+    if (!soundOn) { stopSpeaking(); setState("idle"); }
   };
-  window.Oybot = { open, close, ask };
+  window.Oybot = { open, close, ask, setLang };
 
   renderLang(); setState("idle");
 })();
