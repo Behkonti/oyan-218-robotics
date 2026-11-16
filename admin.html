@@ -111,6 +111,14 @@ const SECTIONS = {
       { key: "sort", label: "Реттік нөмір", type: "number" },
     ],
   },
+  rangers: {
+    title: "Орман қызметкерлері", order: ["full_name", true],
+    hint: "Орман күзеті пультіне (ranger.html) кіре алатын адамдар. Алдымен Supabase → Authentication → Users бөлімінде осы email-мен аккаунт жасаңыз (Auto Confirm), сосын email-ді осында қосыңыз.",
+    fields: [
+      { key: "full_name", label: "Аты-жөні, лауазымы" },
+      { key: "email", label: "Email (кіру логині)", required: true },
+    ],
+  },
   social_links: {
     title: "Сілтемелер", order: ["sort", true],
     hint: "Сілтемесі бос желі сайтта көрсетілмейді.",
@@ -253,12 +261,14 @@ function cameraPanel() {
 window.addEventListener("beforeunload", () => { if (liveTimer) setLive(false); });
 
 async function loadAlerts() {
-  $("hint").textContent = "Камераны осы жерден басқарыңыз. Төменде газ, жоғары температура, өрт белгісі не сұраныс бойынша түсірілген соңғы 3 оқиға. Фото, видео мен AI қорытындысы сайттың мониторында да көрінеді.";
+  $("hint").textContent = "Газ, жоғары температура, өрт белгісі не сұраныс бойынша түсірілген соңғы 3 оқиға. Керексізін осы жерден өшіріңіз.";
   $("list").innerHTML = '<p class="muted">Жүктелуде…</p>';
   const { data, error } = await db.from("alerts").select("*").order("created_at", { ascending: false }).limit(30);
   if (error) { $("list").innerHTML = ""; toast("Жүктеу қатесі: " + error.message, false); return; }
   $("list").innerHTML = "";
-  $("list").appendChild(cameraPanel());
+  const link = document.createElement("div"); link.className = "row";
+  link.innerHTML = '<div class="actions" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span>Камераны басқару, тікелей эфир, фото мен видео енді <b>Орман күзеті пультінде</b>. Админдер де кіре алады.</span><a class="btn" href="ranger.html" target="_blank" rel="noopener">🌲 Пультті ашу</a></div>';
+  $("list").appendChild(link);
   if (!data.length) { $("list").insertAdjacentHTML("beforeend", '<p class="muted">Әзірге оқиға жоқ.</p>'); return; }
   for (const a of data) {
     const card = document.createElement("div"); card.className = "row";

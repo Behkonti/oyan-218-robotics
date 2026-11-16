@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Орман күзеті пульті · OYAN</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#07110d;--panel:#0f1c17;--line:#21372e;--text:#ecf6f0;--muted:#8fa89b;--green:#57d6a0;--cyan:#62c7ee;--amber:#f4bd67;--red:#f07878}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(ellipse at 15% 0%,#12301f 0,transparent 40%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{max-width:1180px;margin:0 auto;padding:18px}
+    header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+    h1{font-size:20px;margin:0;letter-spacing:-.4px}.sub{color:var(--muted);font-size:12px}
+    .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#0c1814;border-radius:999px;padding:7px 12px;font-size:12px;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--amber)}.pill.on .dot{background:var(--green);box-shadow:0 0 10px #57d6a088}.pill.off .dot{background:var(--red)}
+    button,.btn{font:inherit;border:1px solid #2f4d40;background:#132a21;color:var(--text);padding:9px 13px;border-radius:10px;cursor:pointer;text-decoration:none}
+    button:hover{background:#1a3a2d}button:disabled{opacity:.55;cursor:wait}
+    button.primary{background:#1f7a52;border-color:#2a9a69}button.primary:hover{background:#25905f}
+    button.danger{background:#5a2323;border-color:#874040}
+    .card{background:linear-gradient(160deg,#12241c,#0d1915);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+    .card h3{margin:0 0 12px;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .grid{display:grid;grid-template-columns:1.25fr 1fr;gap:14px}
+    .stack{display:grid;gap:14px;align-content:start}
+    .muted{color:var(--muted);font-size:12px}
+    .banner{display:none;border:1px solid #a14444;background:#3a1416;color:#ffd2d2;border-radius:14px;padding:14px 16px;margin-bottom:14px;font-weight:600}
+    .banner.show{display:block}.banner.medium{border-color:#8a6a35;background:#2e2414;color:#ffe2b0}
+    .readings{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .rd{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#0b1712}
+    .rd b{display:block;font-size:22px;letter-spacing:-.5px}.rd span{color:var(--muted);font-size:11px}
+    .rd.warn{border-color:#8a6a35}.rd.bad{border-color:#a14444;background:#2a1214}
+    #map{height:230px;border-radius:12px;border:1px solid var(--line)}
+    .live{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:grid;place-items:center}
+    .live img{width:100%;height:100%;object-fit:contain;display:none}.live .ph{color:var(--muted);font-size:13px;padding:20px;text-align:center}
+    .live .badge{position:absolute;left:10px;top:10px;background:#c62828;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;display:none}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .ev{border:1px solid var(--line);border-radius:12px;background:#0b1712;padding:12px;display:grid;gap:8px}
+    .ev.high{border-color:#a14444}.ev.medium{border-color:#8a6a35}
+    .ev-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+    .chip{font-size:11px;border-radius:99px;padding:3px 9px;background:#1d3329;color:#cfe6da}
+    .d-high{background:#5a2323;color:#ffd2d2}.d-medium{background:#4a3818;color:#ffe2b0}.d-low{background:#164030;color:#9af0c9}
+    .ev img,.ev video{width:100%;max-height:360px;object-fit:contain;background:#000;border-radius:10px}
+    .login{max-width:380px;margin:12vh auto;display:grid;gap:10px}
+    .login input{width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0b1712;color:var(--text)}
+    .hidden{display:none!important}
+    .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#173528;border:1px solid #2a9a69;padding:10px 16px;border-radius:10px;display:none;z-index:9999}
+    .toast.err{background:#3a1416;border-color:#a14444}
+    @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <form class="login card" id="loginForm">
+    <h1>🌲 Орман күзеті пульті</h1>
+    <p class="muted" style="margin:0">OYAN · 218 Robotics жүйесі: өртті ерте анықтау датчиктері, камера және AI. Орман қызметкерлеріне арналған.</p>
+    <label class="muted">Логин немесе email<input id="login" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
+    <label class="muted">Құпиясөз<input id="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit" id="loginBtn">Кіру</button>
+    <div class="muted" id="loginMsg"></div>
+  </form>
+
+  <div id="app" class="hidden">
+    <header>
+      <div>
+        <h1>🌲 Орман күзеті пульті</h1>
+        <div class="sub">Өртті ерте анықтау құрылғысы · Raspberry Pi · <span id="who"></span></div>
+      </div>
+      <div class="row">
+        <span class="pill" id="devPill"><span class="dot"></span><span id="devText">Тексерілуде…</span></span>
+        <button type="button" id="notifyBtn">🔔 Хабарламалар</button>
+        <button type="button" id="logout">Шығу</button>
+      </div>
+    </header>
+
+    <div class="banner" id="banner"></div>
+
+    <div class="grid">
+      <div class="stack">
+        <div class="card">
+          <h3>Тікелей эфир <span class="muted" id="liveStatus">өшірулі</span></h3>
+          <div class="live"><span class="badge" id="liveBadge">● LIVE</span><img id="liveImg" alt="Камерадан тікелей кадр"><div class="ph" id="livePh">Эфирді қосу үшін төмендегі түймені басыңыз. Камера секундына 1 кадр жібереді.</div></div>
+          <div class="row" style="margin-top:10px">
+            <button type="button" id="liveBtn">▶ Эфирді қосу</button>
+            <button type="button" class="primary" id="photoBtn">📷 Фото түсіру</button>
+            <button type="button" class="primary" id="videoBtn">🎥 Видео (8 с)</button>
+          </div>
+          <p class="muted" style="margin:8px 0 0">Фото 10–20 с, видео 20–40 с ішінде дайын болады және AI талдауымен бірге төменде шығады.</p>
+        </div>
+
+        <div class="card">
+          <h3>Оқиғалар <span class="muted">соңғы 3 · AI талдауы</span></h3>
+          <div id="events" class="stack"><p class="muted">Жүктелуде…</p></div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card">
+          <h3>Датчиктер <span class="muted" id="lastSeen">—</span></h3>
+          <div class="readings">
+            <div class="rd" id="rdTemp"><span>Температура</span><b id="vTemp">—</b></div>
+            <div class="rd" id="rdHum"><span>Ылғалдылық</span><b id="vHum">—</b></div>
+            <div class="rd" id="rdGas"><span>Газ (FC-22)</span><b id="vGas">—</b></div>
+            <div class="rd"><span>Қысым</span><b id="vPres">—</b></div>
+          </div>
+          <p class="muted" style="margin:10px 0 0">Ескерту шектері: газ анықталса · температура 35 °C-тан асса · минутына 3 °C-тан тез өссе немесе 50 °C-тан асса — камера өзі суретке және видеоға түсіреді.</p>
+        </div>
+
+        <div class="card">
+          <h3>Құрылғының орны <a class="muted" id="gmaps" target="_blank" rel="noopener" href="#">Google Maps →</a></h3>
+          <div id="map"></div>
+          <p class="muted" style="margin:8px 0 0" id="locText">—</p>
+        </div>
+
+        <div class="card">
+          <h3>Сақшы — AI көмекші</h3>
+          <p class="muted" style="margin:0">Төменгі оң жақтағы Сақшыға жазыңыз не дауыспен айтыңыз: «қазір суретке түсір», «видео түсір», «соңғы сағатта температура қалай өзгерді?».</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const SUPABASE_URL = "https://vefpwvirxdeswutrhpqs.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV";
+const PUBLIC_BASE = SUPABASE_URL + "/storage/v1/object/public/alert-public/";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const $ = (id) => document.getElementById(id);
+const esc = (x) => String(x ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const REASON = { gas: "Газ", high_temp: "Жоғары температура", fire_suspected: "Өрт белгісі", test: "Сынақ", manual: "Сұраныс бойынша" };
+const DANGER = { high: "Жоғары қауіп", medium: "Орташа қауіп", low: "Төмен қауіп" };
+function toast(msg, ok = true) { const t = $("toast"); t.textContent = msg; t.className = "toast" + (ok ? "" : " err"); t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 4000); }
+const fmt = (d) => new Date(d).toLocaleString("kk-KZ", { hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit" });
+
+// ---------- Кіру ----------
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("loginBtn").disabled = true; $("loginMsg").textContent = "";
+  const login = $("login").value.trim();
+  const email = login.includes("@") ? login : login.toLowerCase() + "@oyan218.kz";
+  const { error } = await db.auth.signInWithPassword({ email, password: $("password").value });
+  $("loginBtn").disabled = false;
+  if (error) $("loginMsg").textContent = "Кіру мүмкін болмады: логин немесе құпиясөз қате.";
+});
+$("logout").onclick = async () => { await stopLive(); await db.auth.signOut(); };
+db.auth.onAuthStateChange((_ev, session) => setTimeout(() => onSession(session), 0));
+
+let started = false;
+async function onSession(session) {
+  if (!session) { $("app").classList.add("hidden"); $("loginForm").classList.remove("hidden"); return; }
+  const { data: ok } = await db.rpc("is_ranger");
+  if (!ok) { $("loginMsg").textContent = "Бұл аккаунтқа пультке рұқсат берілмеген. Команда админіне хабарласыңыз."; await db.auth.signOut(); return; }
+  $("who").textContent = session.user.email;
+  $("loginForm").classList.add("hidden"); $("app").classList.remove("hidden");
+  if (!started) { started = true; start(); }
+}
+
+// ---------- Датчиктер ----------
+async function loadSensors() {
+  const { data } = await db.from("sensor_data").select("*").order("created_at", { ascending: false }).limit(1);
+  const r = data?.[0];
+  if (!r) return;
+  const age = (Date.now() - new Date(r.created_at)) / 1000;
+  const on = age < 60;
+  $("devPill").className = "pill " + (on ? "on" : "off");
+  $("devText").textContent = on ? "Құрылғы онлайн" : "Құрылғы офлайн (" + Math.round(age / 60) + " мин)";
+  $("lastSeen").textContent = "соңғы: " + fmt(r.created_at);
+  $("vTemp").textContent = r.temperature != null ? r.temperature.toFixed(1) + " °C" : "—";
+  $("vHum").textContent = r.humidity != null ? Math.round(r.humidity) + " %" : "—";
+  $("vPres").textContent = r.pressure != null ? Math.round(r.pressure) + " hPa" : "—";
+  $("vGas").textContent = r.gas_detected ? "АНЫҚТАЛДЫ" : "Жоқ";
+  $("rdGas").className = "rd" + (r.gas_detected ? " bad" : "");
+  $("rdTemp").className = "rd" + (r.temperature >= 50 ? " bad" : r.temperature > 35 ? " warn" : "");
+}
+
+// ---------- Карта ----------
+let map, marker, circle;
+async function loadLocation() {
+  const { data } = await db.from("device_locations").select("*").order("created_at", { ascending: false }).limit(1);
+  const l = data?.[0];
+  if (!l) { $("locText").textContent = "Орын әлі анықталмаған."; return; }
+  const ll = [l.latitude, l.longitude];
+  if (!map) {
+    map = L.map("map", { attributionControl: true }).setView(ll, 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(map);
+    marker = L.marker(ll).addTo(map);
+    circle = L.circle(ll, { radius: l.accuracy_m || 100, color: "#57d6a0", weight: 1, fillOpacity: .12 }).addTo(map);
+  } else { marker.setLatLng(ll); circle.setLatLng(ll).setRadius(l.accuracy_m || 100); }
+  $("gmaps").href = `https://www.google.com/maps?q=${l.latitude},${l.longitude}`;
+  $("locText").textContent = `${l.latitude.toFixed(5)}, ${l.longitude.toFixed(5)} · дәлдігі ±${Math.round(l.accuracy_m || 0)} м · ${fmt(l.created_at)}` + ((l.accuracy_m || 0) > 2000 ? " (Wi-Fi арқылы шамамен; GPS қосылған соң дәл болады)" : "");
+}
+
+// ---------- Оқиғалар ----------
+let lastAlertId = null, firstLoad = true;
+async function loadEvents() {
+  const { data, error } = await db.from("alerts").select("*").order("created_at", { ascending: false }).limit(3);
+  if (error) { $("events").innerHTML = '<p class="muted">Қате: ' + esc(error.message) + "</p>"; return; }
+  if (!data.length) { $("events").innerHTML = '<p class="muted">Әзірге оқиға жоқ.</p>'; return; }
+  $("events").innerHTML = data.map(a => {
+    const an = a.analysis || {};
+    const seen = [an.fire_visible ? "🔥 от көрінеді" : "", an.smoke_visible ? "💨 түтін көрінеді" : ""].filter(Boolean).join(" · ");
+    const meta = [a.temperature != null ? a.temperature.toFixed(1) + " °C" : "", a.gas_detected ? "газ анықталды" : "", seen].filter(Boolean).join(" · ");
+    return `<div class="ev ${esc(a.danger || "")}">
+      <div class="ev-top"><div class="row">${(a.reasons || []).map(r => `<span class="chip">${esc(REASON[r] || r)}</span>`).join("")}</div>
+        <span class="chip d-${esc(a.danger || "")}">${esc(a.danger ? DANGER[a.danger] : "AI талдауда…")}</span></div>
+      ${a.public_photo_path ? `<a href="${esc(PUBLIC_BASE + a.public_photo_path)}" target="_blank" rel="noopener"><img loading="lazy" alt="Оқиға суреті" src="${esc(PUBLIC_BASE + a.public_photo_path)}"></a>` : ""}
+      ${a.video_path ? `<video controls preload="metadata" playsinline src="${esc(PUBLIC_BASE + a.video_path)}"></video>` : ""}
+      <div>${esc(an.summary_kk || "AI суретті талдап жатыр…")}</div>
+      <div class="muted">${esc(fmt(a.created_at))}${meta ? " · " + esc(meta) : ""}${a.latitude ? ` · <a class="muted" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${a.latitude},${a.longitude}">картада</a>` : ""}</div>
+    </div>`;
+  }).join("");
+  // Қауіп баннері мен хабарлама: соңғы 30 минуттағы орташа/жоғары қауіп
+  const recent = data.find(a => a.danger && a.danger !== "low" && Date.now() - new Date(a.created_at) < 30 * 60000 && !(a.reasons || []).includes("manual") && !(a.reasons || []).includes("test"));
+  const b = $("banner");
+  if (recent) {
+    b.className = "banner show" + (recent.danger === "medium" ? " medium" : "");
+    b.textContent = (recent.danger === "high" ? "🔥 ӨРТ ҚАУПІ! " : "⚠️ Назар аударыңыз: ") + (recent.analysis?.summary_kk || (recent.reasons || []).map(r => REASON[r] || r).join(", ")) + " · " + fmt(recent.created_at);
+  } else b.className = "banner";
+  const newest = data[0];
+  if (!firstLoad && newest.id !== lastAlertId && newest.danger && newest.danger !== "low") alarm(newest);
+  if (newest.danger) { lastAlertId = newest.id; firstLoad = false; }
+}
+function alarm(a) {
+  try { const ctx = new AudioContext(); [0, .35, .7].forEach(t => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(.25, ctx.currentTime + t); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + .22); }); } catch {}
+  if ("Notification" in window && Notification.permission === "granted")
+    new Notification(a.danger === "high" ? "🔥 Өрт қаупі!" : "⚠️ Орман күзеті ескертуі", { body: a.analysis?.summary_kk || "", tag: "oyan-" + a.id });
+}
+$("notifyBtn").onclick = async () => {
+  if (!("Notification" in window)) return toast("Бұл браузер хабарламаларды қолдамайды", false);
+  const p = await Notification.requestPermission();
+  toast(p === "granted" ? "Хабарламалар қосылды: қауіп болса, дыбыс пен хабар шығады" : "Хабарламаға рұқсат берілмеді", p === "granted");
+};
+
+// ---------- Камера сұраныстары ----------
+async function cameraRequest(kind, btn) {
+  btn.disabled = true; const old = btn.textContent; btn.textContent = kind === "video" ? "Видео түсірілуде…" : "Түсірілуде…";
+  try {
+    const { data, error } = await db.from("camera_requests").insert({ source: "ranger", kind }).select("id").single();
+    if (error) throw error;
+    const t0 = Date.now();
+    while (Date.now() - t0 < (kind === "video" ? 70000 : 45000)) {
+      await new Promise(r => setTimeout(r, 2000));
+      const { data: rq } = await db.from("camera_requests").select("alert_id,error").eq("id", data.id).single();
+      if (rq?.error) throw new Error(rq.error);
+      if (rq?.alert_id) {
+        const { data: a } = await db.from("alerts").select("analysis,video_path").eq("id", rq.alert_id).single();
+        if (a?.analysis && (kind !== "video" || a.video_path)) { toast(kind === "video" ? "Видео дайын" : "Фото дайын"); loadEvents(); return; }
+      }
+    }
+    throw new Error("құрылғы уақытында жауап бермеді");
+  } catch (e) { toast("Камера: " + e.message, false); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+$("photoBtn").onclick = (e) => cameraRequest("photo", e.currentTarget);
+$("videoBtn").onclick = (e) => cameraRequest("video", e.currentTarget);
+
+// ---------- Тікелей эфир ----------
+let liveTimer = null, liveKeep = null, liveUrl = null;
+async function setLive(on) {
+  const { error } = await db.from("camera_live").update({ until: on ? new Date(Date.now() + 60000).toISOString() : null }).eq("id", 1);
+  if (error) toast("Эфир: " + error.message, false);
+}
+async function stopLive() {
+  if (!liveTimer) return;
+  clearInterval(liveTimer); clearInterval(liveKeep); liveTimer = liveKeep = null;
+  $("liveBtn").textContent = "▶ Эфирді қосу"; $("liveBadge").style.display = "none"; $("liveStatus").textContent = "өшірулі";
+  $("liveImg").style.display = "none"; $("livePh").style.display = "block";
+  await setLive(false);
+}
+async function liveFrame() {
+  const { data: files } = await db.storage.from("alert-photos").list("live", { limit: 20, sortBy: { column: "name", order: "desc" } });
+  const frames = (files || []).filter(f => f.name.endsWith(".jpg"));
+  if (!frames.length) { $("liveStatus").textContent = "камера қосылуда…"; return; }
+  const ts = Number(frames[0].name.replace(".jpg", "")), age = (Date.now() - ts) / 1000;
+  const { data: blob } = await db.storage.from("alert-photos").download("live/" + frames[0].name);
+  if (blob) {
+    const u = URL.createObjectURL(blob); $("liveImg").src = u; if (liveUrl) URL.revokeObjectURL(liveUrl); liveUrl = u;
+    $("liveImg").style.display = "block"; $("livePh").style.display = "none";
+  }
+  const live = age < 6;
+  $("liveBadge").style.display = live ? "block" : "none";
+  $("liveStatus").textContent = live ? "тікелей · " + new Date(ts).toLocaleTimeString("kk-KZ") : "соңғы кадр " + Math.round(age) + " с бұрын";
+  const old = frames.slice(3).map(f => "live/" + f.name);
+  if (old.length) db.storage.from("alert-photos").remove(old);
+}
+$("liveBtn").onclick = async () => {
+  if (liveTimer) return stopLive();
+  $("liveBtn").textContent = "■ Эфирді тоқтату"; $("liveStatus").textContent = "құрылғыға сұраныс жіберілді…";
+  await setLive(true);
+  liveKeep = setInterval(() => setLive(true), 30000);
+  liveTimer = setInterval(() => liveFrame().catch(() => {}), 1000);
+};
+window.addEventListener("pagehide", () => { if (liveTimer) setLive(false); });
+
+function start() {
+  loadSensors(); loadLocation(); loadEvents();
+  setInterval(loadSensors, 6000); setInterval(loadEvents, 5000); setInterval(loadLocation, 60000);
+}
+window.SAKSHY_TOKEN = async () => { try { return (await db.auth.getSession()).data.session?.access_token || ""; } catch { return ""; } };
+</script>
+<script src="assistant.js?v=12" data-url="https://vefpwvirxdeswutrhpqs.supabase.co" data-key="sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV" defer></script>
+</body>
+</html>
