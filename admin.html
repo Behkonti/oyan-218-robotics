@@ -62,7 +62,7 @@ label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
 
   <form class="login" id="loginForm">
     <h2 style="font-size:20px">Кіру</h2>
-    <label for="email">Email<input id="email" type="email" autocomplete="username" required></label>
+    <label for="email">Логин<input id="email" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="admin" required></label>
     <label for="password">Құпиясөз<input id="password" type="password" autocomplete="current-password" required></label>
     <button class="primary" type="submit" id="loginBtn">Кіру</button>
     <div class="muted" id="loginMsg"></div>
@@ -135,9 +135,11 @@ function toast(text, ok = true) {
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("loginBtn").disabled = true; $("loginMsg").textContent = "";
-  const { error } = await db.auth.signInWithPassword({ email: $("email").value.trim(), password: $("password").value });
+  const login = $("email").value.trim();
+  const email = login.includes("@") ? login : login.toLowerCase() + "@oyan218.kz";   // «admin» → admin@oyan218.kz
+  const { error } = await db.auth.signInWithPassword({ email, password: $("password").value });
   $("loginBtn").disabled = false;
-  if (error) $("loginMsg").textContent = "Кіру мүмкін болмады: email немесе құпиясөз қате.";
+  if (error) $("loginMsg").textContent = "Кіру мүмкін болмады: логин немесе құпиясөз қате.";
 });
 $("logout").addEventListener("click", () => db.auth.signOut());
 
@@ -170,7 +172,7 @@ function renderTabs() {
     $("tabs").appendChild(b);
   }
   const b = document.createElement("button");
-  b.type = "button"; b.className = "tab"; b.textContent = "Камера оқиғалары"; b.setAttribute("role", "tab");
+  b.type = "button"; b.className = "tab"; b.textContent = "Камера"; b.setAttribute("role", "tab");
   b.setAttribute("aria-selected", current === "alerts");
   b.onclick = () => { current = "alerts"; renderTabs(); loadSection(); };
   $("tabs").appendChild(b);
@@ -179,13 +181,85 @@ function renderTabs() {
 // ---------- Камера оқиғалары: фото тек админдерге көрінеді ----------
 const REASON_KK = { gas: "Газ", high_temp: "Жоғары температура", fire_suspected: "Өрт белгісі", test: "Сынақ", manual: "Сұраныс бойынша" };
 const DANGER_KK = { high: "Жоғары қауіп", medium: "Орташа қауіп", low: "Төмен қауіп" };
+// ---------- Камераны басқару: фото, видео, тікелей эфир ----------
+let liveTimer = null, liveKeep = null, liveUrl = null;
+async function cameraRequest(kind, btn) {
+  btn.disabled = true; const old = btn.textContent; btn.textContent = kind === "video" ? "Видео түсірілуде…" : "Түсірілуде…";
+  try {
+    const { data, error } = await db.from("camera_requests").insert({ source: "admin", kind }).select("id").single();
+    if (error) throw error;
+    const t0 = Date.now();
+    while (Date.now() - t0 < (kind === "video" ? 70000 : 45000)) {
+      await new Promise(r => setTimeout(r, 2000));
+      const { data: rq } = await db.from("camera_requests").select("alert_id,error").eq("id", data.id).single();
+      if (rq?.error) throw new Error(rq.error);
+      if (rq?.alert_id) {
+        const { data: a } = await db.from("alerts").select("analysis,video_path").eq("id", rq.alert_id).single();
+        if (a?.analysis && (kind !== "video" || a.video_path)) { toast(kind === "video" ? "Видео дайын" : "Фото дайын"); if (current === "alerts") loadAlerts(); return; }
+      }
+    }
+    throw new Error("Pi уақытында жауап бермеді (Pi өшік не camera_alert.py тоқтап тұр)");
+  } catch (e) { toast("Камера: " + e.message, false); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+async function setLive(on) {
+  const until = on ? new Date(Date.now() + 60000).toISOString() : null;
+  const { error } = await db.from("camera_live").update({ until }).eq("id", 1);
+  if (error) toast("Эфир: " + error.message, false);
+}
+function stopLiveView() {
+  clearInterval(liveTimer); clearInterval(liveKeep); liveTimer = liveKeep = null;
+  if (liveUrl) { URL.revokeObjectURL(liveUrl); liveUrl = null; }
+}
+async function liveFrame(img, status) {
+  const { data: files } = await db.storage.from("alert-photos").list("live", { limit: 20, sortBy: { column: "name", order: "desc" } });
+  const frames = (files || []).filter(f => f.name.endsWith(".jpg"));
+  if (!frames.length) { status.textContent = "Pi-дан кадр күтілуде… (бірнеше секунд)"; return; }
+  const newest = frames[0];
+  const age = Math.round((Date.now() - Number(newest.name.replace(".jpg", ""))) / 1000);
+  const { data: blob } = await db.storage.from("alert-photos").download("live/" + newest.name);
+  if (blob) { const u = URL.createObjectURL(blob); img.src = u; if (liveUrl) URL.revokeObjectURL(liveUrl); liveUrl = u; }
+  status.textContent = age < 6 ? "● ТІКЕЛЕЙ ЭФИР · " + new Date(Number(newest.name.replace(".jpg", ""))).toLocaleTimeString("kk-KZ") : "Соңғы кадр " + age + " с бұрын — Pi жауап бермей тұр";
+  const old = frames.slice(3).map(f => "live/" + f.name);
+  if (old.length) db.storage.from("alert-photos").remove(old);
+}
+function cameraPanel() {
+  const box = document.createElement("div"); box.className = "row";
+  box.innerHTML = `<div class="actions" style="flex-wrap:wrap;gap:8px">
+      <button type="button" class="primary" id="camPhoto">📷 Фото түсір</button>
+      <button type="button" class="primary" id="camVideo">🎥 Видео түсір (8 с)</button>
+      <button type="button" id="camLive">▶ Тікелей эфир</button>
+    </div>
+    <div id="liveBox" class="hidden" style="display:grid;gap:6px">
+      <img id="liveImg" alt="Тікелей эфир" style="width:100%;max-width:640px;border-radius:10px;background:#000;min-height:120px">
+      <span class="muted" id="liveStatus">Қосылуда…</span>
+    </div>
+    <p class="muted" style="margin:0">Фото 10–20 секундта, видео 20–40 секундта дайын болады. Эфир секундына 1 кадр көрсетеді; бетті жапсаңыз, бір минуттан кейін өзі тоқтайды.</p>`;
+  box.querySelector("#camPhoto").onclick = (e) => cameraRequest("photo", e.currentTarget);
+  box.querySelector("#camVideo").onclick = (e) => cameraRequest("video", e.currentTarget);
+  const liveBtn = box.querySelector("#camLive"), liveBox = box.querySelector("#liveBox");
+  const img = box.querySelector("#liveImg"), status = box.querySelector("#liveStatus");
+  const setUi = (on) => { liveBtn.textContent = on ? "■ Эфирді тоқтату" : "▶ Тікелей эфир"; liveBox.classList.toggle("hidden", !on); };
+  liveBtn.onclick = async () => {
+    if (liveTimer) { stopLiveView(); setUi(false); await setLive(false); return; }
+    setUi(true); status.textContent = "Pi-ға сұраныс жіберілді…";
+    await setLive(true);
+    liveKeep = setInterval(() => setLive(true), 30000);
+    liveTimer = setInterval(() => liveFrame(img, status).catch(() => {}), 1000);
+  };
+  if (liveTimer) setUi(true);
+  return box;
+}
+window.addEventListener("beforeunload", () => { if (liveTimer) setLive(false); });
+
 async function loadAlerts() {
-  $("hint").textContent = "Газ, жоғары температура немесе өрт белгісі кезінде Pi камерасы түсірген суреттер. Фото мен AI қорытындысы сайттың мониторында да көрінеді; керексізін осы жерден өшіріңіз.";
+  $("hint").textContent = "Камераны осы жерден басқарыңыз. Төменде газ, жоғары температура, өрт белгісі не сұраныс бойынша түсірілген соңғы 3 оқиға. Фото, видео мен AI қорытындысы сайттың мониторында да көрінеді.";
   $("list").innerHTML = '<p class="muted">Жүктелуде…</p>';
   const { data, error } = await db.from("alerts").select("*").order("created_at", { ascending: false }).limit(30);
   if (error) { $("list").innerHTML = ""; toast("Жүктеу қатесі: " + error.message, false); return; }
-  if (!data.length) { $("list").innerHTML = '<p class="muted">Әзірге оқиға жоқ.</p>'; return; }
   $("list").innerHTML = "";
+  $("list").appendChild(cameraPanel());
+  if (!data.length) { $("list").insertAdjacentHTML("beforeend", '<p class="muted">Әзірге оқиға жоқ.</p>'); return; }
   for (const a of data) {
     const card = document.createElement("div"); card.className = "row";
     const an = a.analysis || {};
@@ -200,6 +274,12 @@ async function loadAlerts() {
       if (signed) img.src = signed.signedUrl;
       card.appendChild(img);
     }
+    if (a.video_path) {
+      const v = document.createElement("video"); v.controls = true; v.preload = "metadata"; v.playsInline = true;
+      v.style.cssText = "width:100%;max-height:420px;border-radius:10px;background:#000";
+      v.src = SUPABASE_URL + "/storage/v1/object/public/alert-public/" + a.video_path;
+      card.appendChild(v);
+    }
     const p = document.createElement("p"); p.style.margin = "0";
     p.textContent = an.summary_kk || "AI талдауы әлі дайын емес.";
     card.appendChild(p);
@@ -212,6 +292,7 @@ async function loadAlerts() {
       if (!del.dataset.confirm) { del.dataset.confirm = "1"; del.textContent = "Иә, өшіру"; setTimeout(() => { delete del.dataset.confirm; del.textContent = "Өшіру"; }, 4000); return; }
       if (a.photo_path) await db.storage.from("alert-photos").remove([a.photo_path]);
       if (a.public_photo_path) await db.storage.from("alert-public").remove([a.public_photo_path]);
+      if (a.video_path) await db.storage.from("alert-public").remove([a.video_path]);
       const { error } = await db.from("alerts").delete().eq("id", a.id);
       if (error) toast("Өшірілмеді: " + error.message, false); else { toast("Өшірілді"); loadAlerts(); }
     };
@@ -221,6 +302,7 @@ async function loadAlerts() {
 }
 
 async function loadSection() {
+  if (current !== "alerts" && liveTimer) { stopLiveView(); setLive(false); }
   if (current === "alerts") return loadAlerts();
   const s = SECTIONS[current];
   $("hint").textContent = s.hint;
@@ -320,5 +402,7 @@ async function remove(id) {
   toast("Өшірілді"); loadSection();
 }
 </script>
+<script>window.SAKSHY_TOKEN = async () => { try { return (await db.auth.getSession()).data.session?.access_token || ""; } catch { return ""; } };</script>
+<script src="assistant.js?v=12" data-url="https://vefpwvirxdeswutrhpqs.supabase.co" data-key="sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV" defer></script>
 </body>
 </html>

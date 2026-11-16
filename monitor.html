@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#080e19">
   <title>Environment Monitor · Behkonti</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="i18n.js?v=9"></script>
-  <script src="i18n-monitor.js?v=10"></script>
+  <script src="i18n.js?v=12"></script>
+  <script src="i18n-monitor.js?v=12"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -347,7 +347,7 @@
   const PHOTO_BASE = SUPABASE_URL + "/storage/v1/object/public/alert-public/";
   async function loadEvents() {
     try {
-      const r = await fetch(SUPABASE_URL + "/rest/v1/alerts?select=id,created_at,reasons,temperature,eco2,gas_detected,danger,analysis,public_photo_path&order=created_at.desc&limit=3", {
+      const r = await fetch(SUPABASE_URL + "/rest/v1/alerts?select=id,created_at,reasons,temperature,eco2,gas_detected,danger,analysis,public_photo_path,video_path&order=created_at.desc&limit=3", {
         cache: "no-store", headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY }
       });
       const rows = await r.json();
@@ -362,7 +362,8 @@
         const seen = [a.fire_visible ? t("видно огонь") : "", a.smoke_visible ? t("виден дым") : ""].filter(Boolean).join(", ");
         const meta = [e.temperature != null ? numberOrDash(e.temperature) + " °C" : "", e.eco2 != null ? numberOrDash(e.eco2, 0) + " ppm" : "", e.gas_detected ? t("газ обнаружен") : "", seen].filter(Boolean).join(" · ");
         const photo = e.public_photo_path ? '<a href="' + escH(PHOTO_BASE + encodeURIComponent(e.public_photo_path)) + '" target="_blank" rel="noopener"><img class="ev-photo" loading="lazy" alt="' + escH(t("Фото с камеры")) + '" src="' + escH(PHOTO_BASE + encodeURIComponent(e.public_photo_path)) + '"></a>' : "";
-        return '<div class="ev"><div class="ev-top"><div class="ev-chips">' + chips + '</div>' + danger + '</div>' + photo +
+        const video = e.video_path ? '<video class="ev-photo" controls preload="metadata" playsinline src="' + escH(PHOTO_BASE + e.video_path) + '"></video>' : "";
+        return '<div class="ev"><div class="ev-top"><div class="ev-chips">' + chips + '</div>' + danger + '</div>' + photo + video +
           '<div class="ev-text">' + (summary ? escH(summary) : '<span class="ev-empty">' + escH(t("ИИ анализирует фото…")) + '</span>') + '</div>' +
           '<div class="ev-meta"><span class="ev-time">' + escH(new Date(e.created_at).toLocaleString(LOCALE())) + '</span>' + (meta ? " · " + escH(meta) : "") + '</div></div>';
       }).join("");
@@ -381,6 +382,6 @@
   loadData();
   setInterval(loadData, REFRESH_MS);
 </script>
-<script src="assistant.js?v=9" data-url="https://vefpwvirxdeswutrhpqs.supabase.co" data-key="sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV" defer></script>
+<script src="assistant.js?v=12" data-url="https://vefpwvirxdeswutrhpqs.supabase.co" data-key="sb_publishable_XzBrImLyuvBcYlI-1u1_-w_bjYuWyzV" defer></script>
 </body>
 </html>

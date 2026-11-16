@@ -529,7 +529,8 @@
     try {
       const r = await fetch(ASK_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", apikey: KEY },
+        headers: Object.assign({ "Content-Type": "application/json", apikey: KEY },
+          window.SAKSHY_TOKEN ? { Authorization: "Bearer " + (await window.SAKSHY_TOKEN()) } : {}),
         body: JSON.stringify({ question, history: history.slice(-10), mode: soundOn ? "voice" : "text", lang }),
       });
       const data = await r.json().catch(() => ({}));
