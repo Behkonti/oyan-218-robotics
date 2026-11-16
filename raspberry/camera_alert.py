@@ -41,6 +41,20 @@ def latest_row():
     rows = r.json()
     return rows[0] if rows else None
 
+def pending_request():
+    """Сақшыдан келген «қазір суретке түсір» сұранысы."""
+    r = requests.get(URL + "/rest/v1/camera_requests?select=id,created_at&done_at=is.null&order=created_at.asc&limit=1",
+                     headers=H, timeout=10)
+    if not r.ok:
+        return None
+    rows = r.json()
+    return rows[0] if rows else None
+
+def finish_request(rid, alert_id=None, error=None):
+    requests.patch(URL + f"/rest/v1/camera_requests?id=eq.{rid}",
+                   json={"done_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "alert_id": alert_id, "error": error},
+                   headers={**H, "Content-Type": "application/json", "Prefer": "return=minimal"}, timeout=10)
+
 def latest_location():
     try:
         r = requests.get(URL + "/rest/v1/device_locations?select=latitude,longitude&order=created_at.desc&limit=1", headers=H, timeout=10)
@@ -97,6 +111,17 @@ def main():
     while True:
         try:
             row = latest_row()
+            req = pending_request()
+            if req:
+                ts = datetime.datetime.fromisoformat(req["created_at"].replace("Z", "+00:00"))
+                if (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() > 120:
+                    finish_request(req["id"], error="expired")
+                else:
+                    log("Sakshy suranysy", req["id"])
+                    try:
+                        finish_request(req["id"], alert_id=send_alert(["manual"], row))
+                    except Exception as e:
+                        finish_request(req["id"], error=str(e)[:200])
             fresh = False
             if row:
                 ts = datetime.datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))

@@ -7,7 +7,7 @@
   <title>Environment Monitor · Behkonti</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="i18n.js?v=9"></script>
-  <script src="i18n-monitor.js?v=9"></script>
+  <script src="i18n-monitor.js?v=10"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -84,7 +84,7 @@
   <section class="section events" aria-label="События с камеры">
     <div class="sectionhead"><h3>События с камеры</h3><span class="tag">Камера · анализ ИИ</span></div>
     <div class="ev-list" id="eventList" data-noi18n><div class="ev-empty">Загрузка…</div></div>
-    <div class="hint" style="margin-top:10px">Камера снимает, когда обнаружен газ, температура выше 35 °C или есть признаки пожара. Фото показывается здесь, только если на нём нет людей.</div>
+    <div class="hint" style="margin-top:10px">Камера снимает, когда обнаружен газ, температура выше 35 °C, есть признаки пожара или по просьбе Сакшы. Хранятся последние 3 снимка.</div>
   </section>
   <section class="section location" aria-label="Местоположение устройства">
     <div class="sectionhead"><h3>Местоположение устройства</h3><span class="tag" id="locTag">Wi-Fi геолокация</span></div>
@@ -341,13 +341,13 @@
     },
   });
   // ---------- События с камеры (таблица alerts) ----------
-  const REASONS = { gas: "Газ", high_temp: "Высокая температура", fire_suspected: "Признак пожара", test: "Тест" };
+  const REASONS = { gas: "Газ", high_temp: "Высокая температура", fire_suspected: "Признак пожара", test: "Тест", manual: "По запросу" };
   const DANGER = { high: "Высокая опасность", medium: "Средняя опасность", low: "Низкая опасность" };
   function escH(x) { return String(x ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
   const PHOTO_BASE = SUPABASE_URL + "/storage/v1/object/public/alert-public/";
   async function loadEvents() {
     try {
-      const r = await fetch(SUPABASE_URL + "/rest/v1/alerts?select=id,created_at,reasons,temperature,eco2,gas_detected,danger,analysis,public_photo_path&order=created_at.desc&limit=8", {
+      const r = await fetch(SUPABASE_URL + "/rest/v1/alerts?select=id,created_at,reasons,temperature,eco2,gas_detected,danger,analysis,public_photo_path&order=created_at.desc&limit=3", {
         cache: "no-store", headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY }
       });
       const rows = await r.json();

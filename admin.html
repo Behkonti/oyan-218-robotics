@@ -177,10 +177,10 @@ function renderTabs() {
 }
 
 // ---------- Камера оқиғалары: фото тек админдерге көрінеді ----------
-const REASON_KK = { gas: "Газ", high_temp: "Жоғары температура", fire_suspected: "Өрт белгісі", test: "Сынақ" };
+const REASON_KK = { gas: "Газ", high_temp: "Жоғары температура", fire_suspected: "Өрт белгісі", test: "Сынақ", manual: "Сұраныс бойынша" };
 const DANGER_KK = { high: "Жоғары қауіп", medium: "Орташа қауіп", low: "Төмен қауіп" };
 async function loadAlerts() {
-  $("hint").textContent = "Газ, жоғары температура немесе өрт белгісі кезінде Pi камерасы түсірген суреттер. Фото тек осы жерде көрінеді, сайтта AI-дың мәтіндік қорытындысы ғана тұрады.";
+  $("hint").textContent = "Газ, жоғары температура немесе өрт белгісі кезінде Pi камерасы түсірген суреттер. Фото мен AI қорытындысы сайттың мониторында да көрінеді; керексізін осы жерден өшіріңіз.";
   $("list").innerHTML = '<p class="muted">Жүктелуде…</p>';
   const { data, error } = await db.from("alerts").select("*").order("created_at", { ascending: false }).limit(30);
   if (error) { $("list").innerHTML = ""; toast("Жүктеу қатесі: " + error.message, false); return; }
