@@ -211,6 +211,7 @@ async function loadAlerts() {
     del.onclick = async () => {
       if (!del.dataset.confirm) { del.dataset.confirm = "1"; del.textContent = "Иә, өшіру"; setTimeout(() => { delete del.dataset.confirm; del.textContent = "Өшіру"; }, 4000); return; }
       if (a.photo_path) await db.storage.from("alert-photos").remove([a.photo_path]);
+      if (a.public_photo_path) await db.storage.from("alert-public").remove([a.public_photo_path]);
       const { error } = await db.from("alerts").delete().eq("id", a.id);
       if (error) toast("Өшірілмеді: " + error.message, false); else { toast("Өшірілді"); loadAlerts(); }
     };
