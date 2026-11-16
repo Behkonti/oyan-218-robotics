@@ -169,9 +169,58 @@ function renderTabs() {
     b.onclick = () => { current = key; renderTabs(); loadSection(); };
     $("tabs").appendChild(b);
   }
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "tab"; b.textContent = "Камера оқиғалары"; b.setAttribute("role", "tab");
+  b.setAttribute("aria-selected", current === "alerts");
+  b.onclick = () => { current = "alerts"; renderTabs(); loadSection(); };
+  $("tabs").appendChild(b);
+}
+
+// ---------- Камера оқиғалары: фото тек админдерге көрінеді ----------
+const REASON_KK = { gas: "Газ", high_temp: "Жоғары температура", fire_suspected: "Өрт белгісі", test: "Сынақ" };
+const DANGER_KK = { high: "Жоғары қауіп", medium: "Орташа қауіп", low: "Төмен қауіп" };
+async function loadAlerts() {
+  $("hint").textContent = "Газ, жоғары температура немесе өрт белгісі кезінде Pi камерасы түсірген суреттер. Фото тек осы жерде көрінеді, сайтта AI-дың мәтіндік қорытындысы ғана тұрады.";
+  $("list").innerHTML = '<p class="muted">Жүктелуде…</p>';
+  const { data, error } = await db.from("alerts").select("*").order("created_at", { ascending: false }).limit(30);
+  if (error) { $("list").innerHTML = ""; toast("Жүктеу қатесі: " + error.message, false); return; }
+  if (!data.length) { $("list").innerHTML = '<p class="muted">Әзірге оқиға жоқ.</p>'; return; }
+  $("list").innerHTML = "";
+  for (const a of data) {
+    const card = document.createElement("div"); card.className = "row";
+    const an = a.analysis || {};
+    const head = document.createElement("div"); head.className = "actions"; head.style.justifyContent = "space-between";
+    head.innerHTML = `<strong></strong><span class="muted"></span>`;
+    head.querySelector("strong").textContent = (a.reasons || []).map(r => REASON_KK[r] || r).join(", ") + (a.danger ? " · " + (DANGER_KK[a.danger] || a.danger) : " · талдануда…");
+    head.querySelector(".muted").textContent = new Date(a.created_at).toLocaleString("kk-KZ");
+    card.appendChild(head);
+    if (a.photo_path) {
+      const img = document.createElement("img"); img.alt = "Ескерту суреті"; img.style.cssText = "width:100%;max-height:420px;object-fit:contain;border-radius:10px;background:#000";
+      const { data: signed } = await db.storage.from("alert-photos").createSignedUrl(a.photo_path, 3600);
+      if (signed) img.src = signed.signedUrl;
+      card.appendChild(img);
+    }
+    const p = document.createElement("p"); p.style.margin = "0";
+    p.textContent = an.summary_kk || "AI талдауы әлі дайын емес.";
+    card.appendChild(p);
+    const meta = document.createElement("div"); meta.className = "muted";
+    meta.textContent = [a.temperature != null ? a.temperature.toFixed(1) + " °C" : "", a.eco2 != null ? Math.round(a.eco2) + " ppm" : "",
+      a.gas_detected ? "газ бар" : "", an.fire_visible ? "от көрінеді" : "", an.smoke_visible ? "түтін көрінеді" : ""].filter(Boolean).join(" · ");
+    card.appendChild(meta);
+    const del = document.createElement("button"); del.type = "button"; del.className = "danger"; del.textContent = "Өшіру";
+    del.onclick = async () => {
+      if (!del.dataset.confirm) { del.dataset.confirm = "1"; del.textContent = "Иә, өшіру"; setTimeout(() => { delete del.dataset.confirm; del.textContent = "Өшіру"; }, 4000); return; }
+      if (a.photo_path) await db.storage.from("alert-photos").remove([a.photo_path]);
+      const { error } = await db.from("alerts").delete().eq("id", a.id);
+      if (error) toast("Өшірілмеді: " + error.message, false); else { toast("Өшірілді"); loadAlerts(); }
+    };
+    const act = document.createElement("div"); act.className = "actions"; act.appendChild(del); card.appendChild(act);
+    $("list").appendChild(card);
+  }
 }
 
 async function loadSection() {
+  if (current === "alerts") return loadAlerts();
   const s = SECTIONS[current];
   $("hint").textContent = s.hint;
   $("list").innerHTML = '<p class="muted">Жүктелуде…</p>';
